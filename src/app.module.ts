@@ -2,6 +2,10 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { TagService } from './modules/tag/tag.service';
+import { TagController } from './modules/tag/tag.controller';
+import { TagModule } from './modules/tag/tag.module';
+import { SongModule } from './modules/song/song.module';
 import configs from './config';
 import { LoggerModule }    from './common/logger/logger.module';
 import { AuthModule }      from './modules/auth/auth.module';
@@ -38,11 +42,14 @@ import { DatabaseModule }  from './infrastructure/database/database.module';
     GenreModule,
     ArtistModule,
     AlbumModule,
+    TagModule,
+    SongModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, TagController],
   providers: [
     AppService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    TagService,
   ],
 })
 
