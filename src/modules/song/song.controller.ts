@@ -150,4 +150,20 @@ export class SongController {
   remove(@Param('id') id: string) {
     return this.songService.remove(id);
   }
+
+  // Check single job status
+  @Get('job/:jobId/status')
+  @UseGuards(RolesGuard)
+  @Roles(RoleType.ADMIN)
+  checkJobStatus(@Param('jobId') jobId: string) {
+    return this.songService.getJobStatus(jobId);
+  }
+
+  // Check overall queue stats
+  @Get('queue/stats')
+  @UseGuards(RolesGuard)
+  @Roles(RoleType.ADMIN)
+  getQueueStats() {
+    return this.songService.getQueueStats();
+  }
 }

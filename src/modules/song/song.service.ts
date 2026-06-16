@@ -11,6 +11,7 @@ import {
 import { S3Service } from '../../infrastructure/s3/s3.service';
 import { createFilter, createMeta, createPaginationInfo } from '../../common/utils/pagination.util';
 import { extractAudioDuration } from '../../common/utils/audio.util';
+import { QueueProducerService } from '../../infrastructure/queue/queue-producer.service';
 
 // populate config reused across queries
 const SONG_POPULATE = [
@@ -28,6 +29,7 @@ export class SongService {
   constructor(
     @InjectModel(Song.name) private readonly songModel: Model<SongDocument>,
     private readonly s3Service: S3Service,
+    private readonly queueProducer: QueueProducerService,
   ) {}
 
   // ─── Single Create ────────────────────────────────────────────────────────
@@ -67,12 +69,12 @@ export class SongService {
   async bulkCreate(
     dto: BulkUploadSongDto,
     audioFiles: Express.Multer.File[],
-    coverFile?: Express.Multer.File,     // ← optional shared cover
+    coverFile?: Express.Multer.File,
   ) {
     if (!audioFiles?.length)
       throw new HttpException('At least one audio file is required', HttpStatus.BAD_REQUEST);
 
-    // upload shared cover once if provided
+    // upload shared cover immediately (small file, fast)
     let sharedCoverUrl = '';
     let sharedCoverKey = '';
 
@@ -82,35 +84,30 @@ export class SongService {
       sharedCoverKey = uploaded.key;
     }
 
-    const uploadResults = await Promise.all(
-      audioFiles.map(async (f) => {
-        const [uploaded, duration] = await Promise.all([
-          this.s3Service.upload(f.path, 'songs/audio'),
-          extractAudioDuration(f.path),
-        ]);
-        return { uploaded, duration };
-      }),
+    // create one job per audio file — files stay on disk until worker picks them up
+    const jobs = await Promise.all(
+      audioFiles.map((f) =>
+        this.queueProducer.addSongUploadJob({
+          filePath:       f.path,
+          originalName:   f.originalname,
+          artists:        dto.artists ?? [],
+          albums:         dto.albums  ?? [],
+          genres:         dto.genres  ?? [],
+          tags:           dto.tags    ?? [],
+          sharedCoverUrl,
+          sharedCoverKey,
+          status:         dto.status ?? 'active',
+        }),
+      ),
     );
 
-    const docs = uploadResults.map(({ uploaded, duration }, i) => ({
-      name:          audioFiles[i].originalname.replace(/\.[^.]+$/, ''),
-      artists:       dto.artists  ?? [],
-      albums:        dto.albums   ?? [],
-      genres:        dto.genres   ?? [],
-      tags:          dto.tags     ?? [],
-      audioFile:     uploaded.url,
-      audioKey:      uploaded.key,
-      coverImage:    sharedCoverUrl,
-      coverImageKey: sharedCoverKey,
-      duration,
-      status:        dto.status ?? 'active',
-    }));
-
-    const songs = await this.songModel.insertMany(docs);
-
+    // return immediately — don't wait for processing
     return {
-      message: `${songs.length} song(s) uploaded successfully`,
-      data:    { count: songs.length, songs },
+      message: `${jobs.length} song(s) queued for processing`,
+      data: {
+        count:  jobs.length,
+        jobIds: jobs.map((j) => j.id),
+      },
     };
   }
 
@@ -251,5 +248,16 @@ export class SongService {
     ]);
 
     return { message: 'Song deleted successfully', data: null };
+  }
+
+  async getJobStatus(jobId: string) {
+    const status = await this.queueProducer.getJobStatus(jobId);
+    if (!status) throw new HttpException('Job not found', HttpStatus.NOT_FOUND);
+    return { message: 'Job status fetched', data: status };
+  }
+
+  async getQueueStats() {
+    const stats = await this.queueProducer.getQueueStats();
+    return { message: 'Queue stats fetched', data: stats };
   }
 }

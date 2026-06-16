@@ -1,0 +1,44 @@
+services:
+  api:
+    build: .
+    container_name: backend-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    container_name: backend-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: ["node", "dist/src/worker.js"]
+    volumes:
+      - ./uploads:/app/uploads    # shares same disk with api
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    container_name: backend-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  redis_data:

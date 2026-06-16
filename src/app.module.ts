@@ -16,6 +16,7 @@ import { AlbumModule }     from './modules/album/album.module';
 import { AppController }   from './app.controller';
 import { AppService }      from './app.service';
 import { DatabaseModule }  from './infrastructure/database/database.module';
+import { QueueModule } from './infrastructure/queue/queue.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { DatabaseModule }  from './infrastructure/database/database.module';
     AlbumModule,
     TagModule,
     SongModule,
+    QueueModule,
   ],
   controllers: [AppController, TagController],
   providers: [
