@@ -21,7 +21,7 @@ services:
       - .env
     command: ["node", "dist/src/worker.js"]
     volumes:
-      - ./uploads:/app/uploads    # shares same disk with api
+      - ./uploads:/app/uploads
     depends_on:
       redis:
         condition: service_healthy
@@ -39,6 +39,15 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: backend-redis-insight
+    restart: unless-stopped
+    ports:
+      - "5540:5540"
+    depends_on:
+      - redis
 
 volumes:
   redis_data:

@@ -56,7 +56,7 @@ export class SongController {
   @UseInterceptors(
     FileFieldsInterceptor(
       [
-        { name: 'audioFiles', maxCount: 50 },
+        { name: 'audioFiles', maxCount: 500 },
         { name: 'coverImage', maxCount: 1  },
       ],
       { storage: mediaStorage },

@@ -2,12 +2,14 @@ import { NestFactory } from '@nestjs/core';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import configs from './config';
+import { LoggerModule }    from './common/logger/logger.module';
 import { DatabaseModule }  from './infrastructure/database/database.module';
 import { QueueModule }     from './infrastructure/queue/queue.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: configs, envFilePath: '.env' }),
+    LoggerModule,
     DatabaseModule,
     QueueModule,
   ],
