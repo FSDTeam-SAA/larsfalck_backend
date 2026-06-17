@@ -17,8 +17,8 @@ export class QueueProducerService {
     const job = await this.songQueue.add(SONG_UPLOAD_JOB, data, {
       attempts:    3,                         // retry 3 times on failure
       backoff:     { type: 'exponential', delay: 2000 },
-      removeOnComplete: { count: 100 },       // keep last 100 completed jobs
-      removeOnFail:     { count: 50  },       // keep last 50 failed jobs
+      removeOnComplete: { age: 3600 },       // keep last 1 hour
+      removeOnFail:     { age: 86400 },      // keep last 24 hours
     });
 
     this.logger.log(`Job queued: ${data.originalName} [Job ${job.id}]`);

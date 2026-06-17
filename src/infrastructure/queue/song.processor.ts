@@ -24,6 +24,7 @@ export interface SongUploadJobData {
 @Processor(SONG_QUEUE, {
   concurrency: 5,   // process 5 songs simultaneously
 })
+
 export class SongProcessor extends WorkerHost {
   private readonly logger = new Logger(SongProcessor.name);
 
