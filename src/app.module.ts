@@ -2,21 +2,20 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
-import { TagService } from './modules/tag/tag.service';
-import { TagController } from './modules/tag/tag.controller';
-import { TagModule } from './modules/tag/tag.module';
-import { SongModule } from './modules/song/song.module';
 import configs from './config';
 import { LoggerModule }    from './common/logger/logger.module';
+import { DatabaseModule }  from './infrastructure/database/database.module';
 import { AuthModule }      from './modules/auth/auth.module';
 import { UserModule }      from './modules/user/user.module';
 import { GenreModule }     from './modules/genre/genre.module';
 import { ArtistModule }    from './modules/artist/artist.module';
 import { AlbumModule }     from './modules/album/album.module';
+import { TagModule }       from './modules/tag/tag.module';
+import { SongModule }      from './modules/song/song.module';
+import { PlaylistModule }  from './modules/playlist/playlist.module';
+import { QueueModule }     from './infrastructure/queue/queue.module';
 import { AppController }   from './app.controller';
 import { AppService }      from './app.service';
-import { DatabaseModule }  from './infrastructure/database/database.module';
-import { QueueModule } from './infrastructure/queue/queue.module';
 
 @Module({
   imports: [
@@ -46,12 +45,12 @@ import { QueueModule } from './infrastructure/queue/queue.module';
     TagModule,
     SongModule,
     QueueModule,
+    PlaylistModule,
   ],
-  controllers: [AppController, TagController],
+  controllers: [AppController],
   providers: [
     AppService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
-    TagService,
   ],
 })
 
