@@ -8,6 +8,7 @@ import { GetUsersQueryDto, UpdateUserDto, AdminUpdateUserDto } from './dto/user.
 import { CloudinaryService } from '../../infrastructure/cloudinary/cloudinary.service';
 import { USER_LIST_FIELDS } from '../../core/constants';
 
+
 const SELECT_FIELDS = USER_LIST_FIELDS;
 
 
@@ -298,5 +299,112 @@ export class UserService {
     const deleted = await this.userModel.findByIdAndDelete(id);
     if (!deleted) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
     return { message: 'User deleted successfully', data: null };
+  }
+
+  // ─── Favorite Songs ───────────────────────────────────────────────────────
+
+async toggleFavoriteSong(userId: string, songId: string) {
+  const user = await this.userModel.findById(userId);
+  if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+
+  const songObjectId  = new Types.ObjectId(songId);
+  const alreadyFaved  = user.favoriteSongs
+    .map((id) => id.toString())
+    .includes(songId);
+
+  const update = alreadyFaved
+    ? { $pull: { favoriteSongs: songObjectId } }
+    : { $addToSet: { favoriteSongs: songObjectId } };
+
+  await this.userModel.findByIdAndUpdate(userId, update);
+
+  return {
+    message:    alreadyFaved ? 'Song removed from favorites' : 'Song added to favorites',
+    data:       { isFavorite: !alreadyFaved },
+  };
+}
+
+async getFavoriteSongs(userId: string) {
+  const user = await this.userModel
+    .findById(userId)
+    .populate({
+      path:     'favoriteSongs',
+      select:   'name audioFile coverImage duration artists genres tags',
+      populate: [
+        { path: 'artists', select: 'name image' },
+        { path: 'genres',  select: 'name'       },
+        { path: 'tags',    select: 'name'        },
+      ],
+    })
+    .select('favoriteSongs');
+
+  if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+
+  return {
+    message: 'Favorite songs fetched successfully',
+    data:    { songs: user.favoriteSongs, count: user.favoriteSongs.length },
+  };
+}
+
+// ─── Favorite Albums ──────────────────────────────────────────────────────
+
+async toggleFavoriteAlbum(userId: string, albumId: string) {
+  const user = await this.userModel.findById(userId);
+  if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+
+  const albumObjectId  = new Types.ObjectId(albumId);
+  const alreadyFaved   = user.favoriteAlbums
+    .map((id) => id.toString())
+    .includes(albumId);
+
+  const update = alreadyFaved
+    ? { $pull:     { favoriteAlbums: albumObjectId } }
+    : { $addToSet: { favoriteAlbums: albumObjectId } };
+
+  await this.userModel.findByIdAndUpdate(userId, update);
+
+  return {
+    message: alreadyFaved ? 'Album removed from favorites' : 'Album added to favorites',
+    data:    { isFavorite: !alreadyFaved },
+  };
+}
+
+async getFavoriteAlbums(userId: string) {
+  const user = await this.userModel
+    .findById(userId)
+    .populate({
+      path:     'favoriteAlbums',
+      select:   'name coverImage releaseDate artists',
+      populate: { path: 'artists', select: 'name image' },
+    })
+    .select('favoriteAlbums');
+
+  if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+
+  return {
+    message: 'Favorite albums fetched successfully',
+    data:    { albums: user.favoriteAlbums, count: user.favoriteAlbums.length },
+  };
+}
+
+// ─── Check favorite status (for frontend heart icon) ─────────────────────
+
+async getFavoriteStatus(userId: string, songIds: string[], albumIds: string[]) {
+  const user = await this.userModel
+    .findById(userId)
+    .select('favoriteSongs favoriteAlbums');
+
+  if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+
+  const favSongSet  = new Set(user.favoriteSongs.map((id) => id.toString()));
+  const favAlbumSet = new Set(user.favoriteAlbums.map((id) => id.toString()));
+
+  return {
+    message: 'Favorite status fetched',
+    data: {
+      songs:  Object.fromEntries(songIds.map((id)  => [id, favSongSet.has(id)])),
+      albums: Object.fromEntries(albumIds.map((id) => [id, favAlbumSet.has(id)])),
+    },
+    };
   }
 }

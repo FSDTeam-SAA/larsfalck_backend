@@ -16,6 +16,7 @@ import { Public }       from '../../common/decorators/public.decorator';
 import { CurrentUser }  from '../../common/decorators/current-user.decorator';
 import { RoleType }     from '../../common/enums/role.enum';
 import { createDiskStorage } from '../../common/utils/multer.util';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 
 const imageStorage = createDiskStorage('images');
 
@@ -66,6 +67,7 @@ export class PlaylistController {
   // ══════════════════════════════════════════════════
 
   @Post('my')
+  @UseGuards(JwtAuthGuard, SubscriptionGuard)
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(
     FileFieldsInterceptor([{ name: 'coverImage', maxCount: 1 }], { storage: imageStorage }),
@@ -79,6 +81,7 @@ export class PlaylistController {
   }
 
   @Get('my')
+  @UseGuards(JwtAuthGuard, SubscriptionGuard) 
   userFindAll(
     @CurrentUser('_id') userId: string,
     @Query() query: GetPlaylistsQueryDto,
@@ -114,6 +117,7 @@ export class PlaylistController {
   }
 
   @Patch(':id/songs/add')
+  @UseGuards(JwtAuthGuard, SubscriptionGuard)  
   addSongs(
     @Param('id') id: string,
     @CurrentUser('_id') userId: string,
@@ -124,6 +128,7 @@ export class PlaylistController {
   }
 
   @Patch(':id/songs/remove')
+  @UseGuards(JwtAuthGuard, SubscriptionGuard) 
   removeSongs(
     @Param('id') id: string,
     @CurrentUser('_id') userId: string,

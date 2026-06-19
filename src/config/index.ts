@@ -5,13 +5,16 @@ import databaseConfig   from './database.config';
 import emailConfig      from './email.config';
 import s3Config         from './s3.config';
 import redisConfig      from './redis.config';
+import stripeConfig     from './stripe.config';
 
 export {
   appConfig, authConfig, cloudinaryConfig,
-  databaseConfig, emailConfig, s3Config, redisConfig,
+  databaseConfig, emailConfig, s3Config,
+  redisConfig, stripeConfig,
 };
 
 export default [
   appConfig, authConfig, cloudinaryConfig,
-  databaseConfig, emailConfig, s3Config, redisConfig,
+  databaseConfig, emailConfig, s3Config,
+  redisConfig, stripeConfig,
 ];
