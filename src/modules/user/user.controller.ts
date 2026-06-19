@@ -25,6 +25,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { RoleType } from '../../common/enums/role.enum';
 import { GetUsersQueryDto, UpdateUserDto, AdminUpdateUserDto } from './dto/user.dto';
+import { SubscriptionGuard } from '../../common/guards/subscription.guard';
 
 // ─── Multer Storage Config ───────────
 const multerStorage = diskStorage({
@@ -220,5 +221,55 @@ export class UserController {
   @HttpCode(HttpStatus.OK)
   adminDeleteUser(@Param('id') id: string) {
     return this.userService.adminDeleteUser(id);
+  }
+
+  // ─── Favorite Songs ───────────────────────────────────────────────────────
+
+  @Post('favorite/song/:songId')
+  @UseGuards(SubscriptionGuard)
+  @HttpCode(HttpStatus.OK)
+  toggleFavoriteSong(
+    @CurrentUser('_id') userId: string,
+    @Param('songId') songId: string,
+  ) {
+    return this.userService.toggleFavoriteSong(userId, songId);
+  }
+
+  @Get('favorites/songs')
+  @UseGuards(SubscriptionGuard)
+  getFavoriteSongs(@CurrentUser('_id') userId: string) {
+    return this.userService.getFavoriteSongs(userId);
+  }
+
+  // ─── Favorite Albums ──────────────────────────────────────────────────────
+
+  @Post('favorite/album/:albumId')
+  @UseGuards(SubscriptionGuard)
+  @HttpCode(HttpStatus.OK)
+  toggleFavoriteAlbum(
+    @CurrentUser('_id') userId: string,
+    @Param('albumId') albumId: string,
+  ) {
+    return this.userService.toggleFavoriteAlbum(userId, albumId);
+  }
+
+  @Get('favorites/albums')
+  @UseGuards(SubscriptionGuard)
+  getFavoriteAlbums(@CurrentUser('_id') userId: string) {
+    return this.userService.getFavoriteAlbums(userId);
+  }
+
+  // ─── Check favorite status (for heart icon state on frontend) ────────────
+
+  @Get('favorites/status')
+  @UseGuards(SubscriptionGuard)
+  getFavoriteStatus(
+    @CurrentUser('_id') userId: string,
+    @Query('songIds')  songIds:  string,
+    @Query('albumIds') albumIds: string,
+  ) {
+    const songs  = songIds  ? songIds.split(',').filter(Boolean)  : [];
+    const albums = albumIds ? albumIds.split(',').filter(Boolean) : [];
+    return this.userService.getFavoriteStatus(userId, songs, albums);
   }
 }

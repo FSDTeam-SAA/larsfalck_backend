@@ -54,12 +54,49 @@ export class User {
   @Prop({ default: null }) refreshToken?: string;
 
   @Prop({ default: false }) hasActiveSubscription: boolean;
+
+  @Prop({
+  type: {
+    planId:                { type: Types.ObjectId, ref: 'Plan', default: null },
+    startDate:             { type: Date, default: null },
+    endDate:               { type: Date, default: null },
+    stripeCustomerId:      { type: String, default: '' },
+    stripeSubscriptionId:  { type: String, default: '' },
+    status: {
+      type:    String,
+      enum:    ['trial', 'active', 'expired', 'cancelled'],
+      default: 'trial',
+    },
+  },
+    default: () => ({
+      planId: null, startDate: null, endDate: null,
+      stripeCustomerId: '', stripeSubscriptionId: '', status: 'trial',
+    }),
+  })
+  subscription: {
+    planId:               Types.ObjectId;
+    startDate:            Date;
+    endDate:              Date;
+    stripeCustomerId:     string;
+    stripeSubscriptionId: string;
+    status:               string;
+  };
+
+  @Prop({ default: null })
+  trialEndsAt?: Date;
+
   @Prop({ default: null })  subscriptionExpireDate?: Date;
 
   @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
   blockedUsers: Types.ObjectId[];
 
   @Prop({ default: 'en' }) language: string;
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Song' }], default: [] })
+ favoriteSongs: Types.ObjectId[];
+
+ @Prop({ type: [{ type: Types.ObjectId, ref: 'Album' }], default: [] })
+ favoriteAlbums: Types.ObjectId[];
 
   comparePassword:    (plain: string) => Promise<boolean>;
   generateAccessToken:  (payload: object, secret: string, expiresIn: string) => string;

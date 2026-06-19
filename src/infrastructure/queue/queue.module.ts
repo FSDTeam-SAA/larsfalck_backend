@@ -2,11 +2,15 @@ import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
-import { SONG_QUEUE } from './queue.constants';
+import { SONG_QUEUE, SUBSCRIPTION_QUEUE } from './queue.constants';
 import { QueueProducerService } from './queue-producer.service';
+import { SubscriptionProducerService } from './subscription-producer.service';
 import { SongProcessor } from './song.processor';
+import { SubscriptionProcessor } from './subscription.processor';
 import { Song, SongSchema } from '../../modules/song/schemas/song.schema';
-import { S3Module } from '../s3/s3.module';
+import { User, UserSchema } from '../../modules/auth/schemas/user.schema';
+import { S3Module }    from '../s3/s3.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -21,13 +25,25 @@ import { S3Module } from '../s3/s3.module';
       inject: [ConfigService],
     }),
 
-    BullModule.registerQueue({ name: SONG_QUEUE }),
+    BullModule.registerQueue(
+      { name: SONG_QUEUE         },
+      { name: SUBSCRIPTION_QUEUE },
+    ),
 
-    MongooseModule.forFeature([{ name: Song.name, schema: SongSchema }]),
+    MongooseModule.forFeature([
+      { name: Song.name, schema: SongSchema },
+      { name: User.name, schema: UserSchema },
+    ]),
     S3Module,
+    EmailModule,
   ],
-  providers: [QueueProducerService, SongProcessor],
-  exports:   [QueueProducerService],
+  providers: [
+    QueueProducerService,
+    SubscriptionProducerService,
+    SongProcessor,
+    SubscriptionProcessor,
+  ],
+  exports: [QueueProducerService, SubscriptionProducerService],
 })
 
 export class QueueModule {}

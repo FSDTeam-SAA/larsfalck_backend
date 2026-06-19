@@ -52,7 +52,16 @@ export class AuthService {
       throw new HttpException('User already registered', HttpStatus.BAD_REQUEST);
     }
 
-    const user = await this.userModel.create(dto);
+    const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+    const user = await this.userModel.create({
+      ...dto,
+      trialEndsAt,
+      subscription: {
+        planId: null, startDate: null, endDate: null,
+        stripeCustomerId: '', stripeSubscriptionId: '', status: 'trial',
+      },
+    });
 
     return {
       message: 'Registered user successfully!',
@@ -62,6 +71,7 @@ export class AuthService {
         email:        user.email,
         role:         user.role,
         profileImage: user.profileImage,
+        trialEndsAt:  user.trialEndsAt,
       },
     };
   }

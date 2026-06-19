@@ -16,6 +16,9 @@ import { PlaylistModule }  from './modules/playlist/playlist.module';
 import { QueueModule }     from './infrastructure/queue/queue.module';
 import { AppController }   from './app.controller';
 import { AppService }      from './app.service';
+import { StripeModule } from './infrastructure/stripe/stripe.module';
+import { PlanModule } from './modules/plan/plan.module';
+import { SubscriptionModule } from './modules/subscription/subscription.module';
 
 @Module({
   imports: [
@@ -46,6 +49,9 @@ import { AppService }      from './app.service';
     SongModule,
     QueueModule,
     PlaylistModule,
+    StripeModule,
+    PlanModule,
+    SubscriptionModule,
   ],
   controllers: [AppController],
   providers: [
