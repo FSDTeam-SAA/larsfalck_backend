@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { FileFieldsInterceptor, FilesInterceptor} from '@nestjs/platform-express';
 import { SongService } from './song.service';
-import { CreateSongDto, UpdateSongDto, GetSongsQueryDto, BulkUploadSongDto } from './dto/song.dto';
+import { CreateSongDto, UpdateSongDto, GetSongsQueryDto, BulkUploadSongDto, BulkUpdateSongDto } from './dto/song.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard }   from '../../common/guards/roles.guard';
 import { Roles }        from '../../common/decorators/roles.decorator';
@@ -68,6 +68,22 @@ export class SongController {
   ) {
     if (!files?.audioFiles?.length) throw new BadRequestException('At least one audio file is required');
     return this.songService.bulkCreate(dto, files.audioFiles, files.coverImage?.[0]);
+  }
+
+  @Put('bulk-update')
+  @UseGuards(RolesGuard)
+  @Roles(RoleType.ADMIN)
+  @UseInterceptors(
+    FileFieldsInterceptor(
+      [{ name: 'coverImage', maxCount: 1 }],
+      { storage: mediaStorage },
+    ),
+  )
+  bulkUpdate(
+    @Body() dto: BulkUpdateSongDto,
+    @UploadedFiles() files: { coverImage?: Express.Multer.File[] },
+  ) {
+    return this.songService.bulkUpdate(dto, files as any);
   }
 
   // ─── Read ────────────────────────────────────────────────────────────────

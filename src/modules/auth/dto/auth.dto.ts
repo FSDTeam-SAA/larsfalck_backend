@@ -5,7 +5,12 @@ import {
   MinLength,
   IsNumberString,
   Length,
+  IsArray,
+  IsMongoId,
+  IsOptional
 } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { Types } from 'mongoose';
 
 /**
  * Auth DTOs
@@ -27,6 +32,14 @@ export class RegisterDto {
   @IsString()
   @MinLength(6)
   password: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsMongoId({ each: true })
+  @Transform(({ value }) =>
+    Array.isArray(value) ? value : String(value).split(',').map((v) => v.trim()).filter(Boolean),
+  )
+  preferredGenres: Types.ObjectId[];
 }
 
 export class LoginDto {
@@ -80,3 +93,5 @@ export class ChangePasswordDto {
   @MinLength(6)
   newPassword: string;
 }
+
+

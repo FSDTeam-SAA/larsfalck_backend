@@ -56,6 +56,7 @@ export class AuthService {
 
     const user = await this.userModel.create({
       ...dto,
+      preferredGenres: dto.preferredGenres ?? [],
       trialEndsAt,
       subscription: {
         planId: null, startDate: null, endDate: null,

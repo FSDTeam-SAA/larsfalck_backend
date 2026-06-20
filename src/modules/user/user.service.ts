@@ -24,13 +24,24 @@ export class UserService {
   async getAllUsers(query: GetUsersQueryDto) {
     const page = Number(query.page || 1);
     const limit = Number(query.limit || 10);
-    const filter = createFilter(query.search, query.date);
+    
+    const filter: any = createFilter(query.search, query.date);
     filter.role = RoleType.USER;
+
+    // search by name or email
+    if (query.search) {
+      filter.$or = [
+        { name:  { $regex: query.search, $options: 'i' } },
+        { email: { $regex: query.search, $options: 'i' } },
+      ];
+      delete filter.name;  // remove the default name filter createFilter added
+    }
 
     const total = await this.userModel.countDocuments(filter);
     const users = await this.userModel
       .find(filter)
-      .select(SELECT_FIELDS)
+      .populate('subscription.planId', 'name price billingCycle')
+      .select('-password -refreshToken -__v')
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit);
@@ -41,7 +52,6 @@ export class UserService {
       data: { users, paginationInfo: createPaginationInfo(page, limit, total) },
     };
   }
-
 
   async getAllAdmins(query: GetUsersQueryDto) {
     const page = Number(query.page || 1);
@@ -280,7 +290,10 @@ export class UserService {
   // ─── Admin CRUD ───────────────
 
   async adminGetUserById(id: string) {
-    const user = await this.userModel.findById(id).select(SELECT_FIELDS);
+    const user = await this.userModel
+      .findById(id)
+      .populate('subscription.planId', 'name price billingCycle')
+      .select('-password -refreshToken -__v');
     if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
     return { message: 'User fetched successfully', data: user };
   }

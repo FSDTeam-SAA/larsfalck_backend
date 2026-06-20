@@ -5,12 +5,14 @@ import { Album, AlbumDocument } from './schemas/album.schema';
 import { CreateAlbumDto, UpdateAlbumDto, GetAlbumsQueryDto } from './dto/album.dto';
 import { S3Service } from '../../infrastructure/s3/s3.service';
 import { createFilter, createMeta, createPaginationInfo } from '../../common/utils/pagination.util';
+import { Song, SongDocument } from '../song/schemas/song.schema';
 
 
 @Injectable()
 export class AlbumService {
   constructor(
     @InjectModel(Album.name) private readonly albumModel: Model<AlbumDocument>,
+    @InjectModel(Song.name)  private readonly songModel:  Model<SongDocument>,
     private readonly s3Service: S3Service,
   ) {}
 
@@ -46,7 +48,7 @@ export class AlbumService {
     const limit = Number(query.limit || 10);
     const filter = createFilter(query.search, query.date);
 
-    if (query.status) filter.status = query.status;
+    if (query.status) filter.status  = query.status;
     if (query.artist) filter.artists = query.artist;
 
     const total  = await this.albumModel.countDocuments(filter);
@@ -58,10 +60,19 @@ export class AlbumService {
       .limit(limit)
       .select('-__v');
 
+    const albumsWithCount = await Promise.all(
+      albums.map(async (album) => {
+        const songCount = await this.songModel.countDocuments({
+          albums: album._id,
+        });
+        return { ...album.toObject(), songCount };
+      }),
+    );
+
     return {
       message: 'Albums fetched successfully',
       meta:    createMeta(page, limit, total),
-      data:    { albums, paginationInfo: createPaginationInfo(page, limit, total) },
+      data:    { albums: albumsWithCount, paginationInfo: createPaginationInfo(page, limit, total) },
     };
   }
 

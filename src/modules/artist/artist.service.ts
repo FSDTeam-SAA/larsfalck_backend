@@ -5,12 +5,14 @@ import { Artist, ArtistDocument } from './schemas/artist.schema';
 import { CreateArtistDto, UpdateArtistDto, GetArtistsQueryDto } from './dto/artist.dto';
 import { S3Service } from '../../infrastructure/s3/s3.service';
 import { createFilter, createMeta, createPaginationInfo } from '../../common/utils/pagination.util';
+import { Song, SongDocument } from '../song/schemas/song.schema';
 
 
 @Injectable()
 export class ArtistService {
   constructor(
     @InjectModel(Artist.name) private readonly artistModel: Model<ArtistDocument>,
+    @InjectModel(Song.name)   private readonly songModel:   Model<SongDocument>,
     private readonly s3Service: S3Service,
   ) {}
 
@@ -48,10 +50,19 @@ export class ArtistService {
       .limit(limit)
       .select('-__v');
 
+    const artistsWithCount = await Promise.all(
+      artists.map(async (artist) => {
+        const songCount = await this.songModel.countDocuments({
+          artists: artist._id,
+        });
+        return { ...artist.toObject(), songCount };
+      }),
+    );
+
     return {
       message: 'Artists fetched successfully',
       meta:    createMeta(page, limit, total),
-      data:    { artists, paginationInfo: createPaginationInfo(page, limit, total) },
+      data:    { artists: artistsWithCount, paginationInfo: createPaginationInfo(page, limit, total) },
     };
   }
 

@@ -128,3 +128,39 @@ export class BulkUploadSongDto {
   @IsEnum(['active', 'inactive'])
   status?: string;
 }
+
+
+export class BulkUpdateSongDto {
+  @IsArray()
+  @IsMongoId({ each: true })
+  @Transform(toArray)
+  songIds: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsMongoId({ each: true })
+  @Transform(toArray)
+  artists?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsMongoId({ each: true })
+  @Transform(toArray)
+  albums?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsMongoId({ each: true })
+  @Transform(toArray)
+  genres?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsMongoId({ each: true })
+  @Transform(toArray)
+  tags?: string[];
+
+  @IsOptional()
+  @IsEnum(['active', 'inactive'])
+  status?: string;
+}
