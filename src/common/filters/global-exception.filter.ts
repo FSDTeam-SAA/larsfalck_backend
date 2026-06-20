@@ -6,6 +6,8 @@ import { Response } from 'express';
 import { Error as MongooseError } from 'mongoose';
 import { MongoServerError } from 'mongodb';
 
+// catch error -> format errors -> send response 
+
 @Catch()
 export class GlobalExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(GlobalExceptionFilter.name);

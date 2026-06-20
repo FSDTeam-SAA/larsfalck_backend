@@ -7,6 +7,7 @@ import {
   UpdateSongDto,
   GetSongsQueryDto,
   BulkUploadSongDto,
+  BulkUpdateSongDto,
 } from './dto/song.dto';
 import { S3Service } from '../../infrastructure/s3/s3.service';
 import { createFilter, createMeta, createPaginationInfo } from '../../common/utils/pagination.util';
@@ -260,4 +261,48 @@ export class SongService {
     const stats = await this.queueProducer.getQueueStats();
     return { message: 'Queue stats fetched', data: stats };
   }
+
+
+  async bulkUpdate(
+    dto: BulkUpdateSongDto,
+    files: { [fieldname: string]: Express.Multer.File[] },
+  ) {
+    if (!dto.songIds?.length)
+      throw new HttpException('At least one song ID is required', HttpStatus.BAD_REQUEST);
+
+    // build update payload — only include fields that were sent
+    const updatePayload: any = {};
+    if (dto.artists !== undefined) updatePayload.artists = dto.artists;
+    if (dto.albums  !== undefined) updatePayload.albums  = dto.albums;
+    if (dto.genres  !== undefined) updatePayload.genres  = dto.genres;
+    if (dto.tags    !== undefined) updatePayload.tags    = dto.tags;
+    if (dto.status  !== undefined) updatePayload.status  = dto.status;
+
+    // handle shared cover image — upload once, apply to all
+    const coverFile = files['coverImage']?.[0];
+    if (coverFile) {
+      const uploaded = await this.s3Service.upload(coverFile.path, 'songs/covers');
+      updatePayload.coverImage    = uploaded.url;
+      updatePayload.coverImageKey = uploaded.key;
+    }
+
+    if (!Object.keys(updatePayload).length)
+      throw new HttpException('No fields to update', HttpStatus.BAD_REQUEST);
+
+    await this.songModel.updateMany(
+      { _id: { $in: dto.songIds } },
+      { $set: updatePayload },
+    );
+
+    const updatedSongs = await this.songModel
+      .find({ _id: { $in: dto.songIds } })
+      .populate(SONG_POPULATE)
+      .select('-__v');
+
+    return {
+      message: `${updatedSongs.length} song(s) updated successfully`,
+      data:    { count: updatedSongs.length, songs: updatedSongs },
+    };
+  }
+
 }

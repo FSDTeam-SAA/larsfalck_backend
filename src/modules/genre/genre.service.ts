@@ -4,12 +4,14 @@ import { Model } from 'mongoose';
 import { Genre, GenreDocument } from './schemas/genre.schema';
 import { CreateGenreDto, UpdateGenreDto, GetGenresQueryDto } from './dto/genre.dto';
 import { createFilter, createMeta, createPaginationInfo } from '../../common/utils/pagination.util';
+import { Song, SongDocument } from '../song/schemas/song.schema';
 
 
 @Injectable()
 export class GenreService {
   constructor(
     @InjectModel(Genre.name) private readonly genreModel: Model<GenreDocument>,
+    @InjectModel(Song.name)  private readonly songModel:  Model<SongDocument>,
   ) {}
 
   async create(dto: CreateGenreDto) {
@@ -37,10 +39,20 @@ export class GenreService {
       .limit(limit)
       .select('-__v');
 
+    // attach song count to each genre
+    const genresWithCount = await Promise.all(
+      genres.map(async (genre) => {
+        const songCount = await this.songModel.countDocuments({
+          genres: genre._id,
+        });
+        return { ...genre.toObject(), songCount };
+      }),
+    );
+
     return {
       message: 'Genres fetched successfully',
       meta:    createMeta(page, limit, total),
-      data:    { genres, paginationInfo: createPaginationInfo(page, limit, total) },
+      data:    { genres: genresWithCount, paginationInfo: createPaginationInfo(page, limit, total) },
     };
   }
 
