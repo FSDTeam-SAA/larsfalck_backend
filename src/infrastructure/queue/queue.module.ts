@@ -11,6 +11,7 @@ import { Song, SongSchema } from '../../modules/song/schemas/song.schema';
 import { User, UserSchema } from '../../modules/auth/schemas/user.schema';
 import { S3Module }    from '../s3/s3.module';
 import { EmailModule } from '../email/email.module';
+import { RedisModule } from '../redis/redis.module'; 
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { EmailModule } from '../email/email.module';
     ]),
     S3Module,
     EmailModule,
+    RedisModule, 
   ],
   providers: [
     QueueProducerService,
