@@ -1,4 +1,4 @@
-import { Injectable, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, Logger, Inject } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Song, SongDocument } from './schemas/song.schema';
@@ -13,6 +13,7 @@ import { S3Service } from '../../infrastructure/s3/s3.service';
 import { createFilter, createMeta, createPaginationInfo } from '../../common/utils/pagination.util';
 import { extractAudioDuration } from '../../common/utils/audio.util';
 import { QueueProducerService } from '../../infrastructure/queue/queue-producer.service';
+import Redis from 'ioredis';
 
 // populate config reused across queries
 const SONG_POPULATE = [
@@ -31,6 +32,7 @@ export class SongService {
     @InjectModel(Song.name) private readonly songModel: Model<SongDocument>,
     private readonly s3Service: S3Service,
     private readonly queueProducer: QueueProducerService,
+    @Inject('REDIS_CLIENT') private readonly redis: Redis,
   ) {}
 
   // ─── Single Create ────────────────────────────────────────────────────────
@@ -305,4 +307,44 @@ export class SongService {
     };
   }
 
+
+  // ─── Play Count ───────────────────────────────────────────────────────────
+
+  async recordPlay(songId: string) {
+    // verify song exists
+    const exists = await this.songModel.exists({ _id: songId });
+    if (!exists) throw new HttpException('Song not found', HttpStatus.NOT_FOUND);
+
+    // increment in Redis — key: play:songId
+    await this.redis.incr(`play:${songId}`);
+
+    return { message: 'Play recorded', data: null };
+  }
+
+  // ─── Called by BullMQ worker every 5 mins ────────────────────────────────
+
+  async syncPlayCounts() {
+    const keys = await this.redis.keys('play:*');
+    if (!keys.length) return;
+
+    const pipeline = this.redis.pipeline();
+    keys.forEach((key) => pipeline.getdel(key));
+    const results = await pipeline.exec();
+
+    const bulkOps = keys.map((key, i) => {
+      const songId = key.replace('play:', '');
+      const count  = parseInt((results?.[i]?.[1] as string) ?? '0', 10);
+      return {
+        updateOne: {
+          filter: { _id: songId },
+          update: { $inc: { playCount: count } },
+        },
+      };
+    });
+
+    if (bulkOps.length) {
+      await this.songModel.bulkWrite(bulkOps);
+      this.logger.log(`Synced play counts for ${bulkOps.length} songs`);
+    }
+  }
 }

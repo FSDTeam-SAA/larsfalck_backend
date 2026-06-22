@@ -5,3 +5,5 @@ export const SUBSCRIPTION_QUEUE       = 'subscription';
 export const SUBSCRIPTION_ACTIVATED   = 'subscription-activated';
 export const SUBSCRIPTION_REMINDER    = 'subscription-expiry-reminder';
 export const SUBSCRIPTION_EXPIRED     = 'subscription-expired';
+
+export const PLAY_COUNT_SYNC_JOB    = 'play-count-sync';

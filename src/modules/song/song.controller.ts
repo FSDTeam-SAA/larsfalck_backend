@@ -157,6 +157,15 @@ export class SongController {
     return this.songService.updateCoverImage(id, files as any);
   }
 
+
+  // place before :id routes
+  @Public()
+  @Post(':id/play')
+  @HttpCode(HttpStatus.OK)
+  recordPlay(@Param('id') id: string) {
+    return this.songService.recordPlay(id);
+  }
+
   // ─── Delete ───────────────────────────────────────────────────────────────
 
   @Delete(':id')

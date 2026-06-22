@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { SONG_QUEUE, SONG_UPLOAD_JOB } from './queue.constants';
+import { PLAY_COUNT_SYNC_JOB, SONG_QUEUE, SONG_UPLOAD_JOB } from './queue.constants';
 import { SongUploadJobData } from './song.processor';
 
 
@@ -46,5 +46,18 @@ export class QueueProducerService {
     ]);
 
     return { waiting, active, completed, failed };
+  }
+
+  async schedulePlayCountSync() {
+    await this.songQueue.add(
+      PLAY_COUNT_SYNC_JOB,
+      {},
+      {
+        repeat:           { every: 5 * 60 * 1000 },  // every 5 minutes
+        removeOnComplete: true,
+        removeOnFail:     { age: 3600 },
+      },
+    );
+    this.logger.log('Play count sync scheduled every 5 minutes');
   }
 }

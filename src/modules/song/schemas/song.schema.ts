@@ -37,6 +37,9 @@ export class Song {
 
   @Prop({ type: String, enum: ['active', 'inactive'], default: 'active' })
   status: string;
+
+  @Prop({ default: 0 })
+  playCount: number;
 }
 
 export const SongSchema = SchemaFactory.createForClass(Song);
