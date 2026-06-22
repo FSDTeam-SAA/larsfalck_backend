@@ -6,6 +6,7 @@ import { CreateArtistDto, UpdateArtistDto, GetArtistsQueryDto } from './dto/arti
 import { S3Service } from '../../infrastructure/s3/s3.service';
 import { createFilter, createMeta, createPaginationInfo } from '../../common/utils/pagination.util';
 import { Song, SongDocument } from '../song/schemas/song.schema';
+import { Album, AlbumDocument } from '../album/schemas/album.schema';
 
 
 @Injectable()
@@ -13,6 +14,7 @@ export class ArtistService {
   constructor(
     @InjectModel(Artist.name) private readonly artistModel: Model<ArtistDocument>,
     @InjectModel(Song.name)   private readonly songModel:   Model<SongDocument>,
+    @InjectModel(Album.name)  private readonly albumModel:  Model<AlbumDocument>,
     private readonly s3Service: S3Service,
   ) {}
 
@@ -52,10 +54,11 @@ export class ArtistService {
 
     const artistsWithCount = await Promise.all(
       artists.map(async (artist) => {
-        const songCount = await this.songModel.countDocuments({
-          artists: artist._id,
-        });
-        return { ...artist.toObject(), songCount };
+        const [songCount, albumCount] = await Promise.all([
+          this.songModel.countDocuments({ artists: artist._id }),
+          this.albumModel.countDocuments({ artists: artist._id }),
+        ]);
+        return { ...artist.toObject(), songCount, albumCount };
       }),
     );
 
@@ -124,4 +127,53 @@ export class ArtistService {
 
     return { message: 'Artist image updated successfully', data: updated };
   }
+
+  async getProfile(id: string) {
+  const artist = await this.artistModel.findById(id).select('-__v');
+  if (!artist) throw new HttpException('Artist not found', HttpStatus.NOT_FOUND);
+
+  const [albums, allSongs] = await Promise.all([
+    // all albums this artist is involved in
+    this.albumModel
+      .find({ artists: artist._id, status: 'active' })
+      .populate('artists', 'name image')
+      .select('-__v')
+      .sort({ releaseDate: -1 }),
+
+    // all songs by this artist
+    this.songModel
+      .find({ artists: artist._id, status: 'active' })
+      .populate('artists', 'name image')
+      .populate('genres',  'name')
+      .populate('tags',    'name')
+      .select('-__v')
+      .sort({ playCount: -1 }),
+  ]);
+
+  // popular songs — top 5 by playCount
+  const popularSongs = allSongs.slice(0, 5);
+
+  // singles — songs not in any album
+  const singles = allSongs.filter((song) => !song.albums?.length);
+
+  // // album songs — songs that belong to at least one album
+  // const albumSongs = allSongs.filter((song) => song.albums?.length > 0);
+
+  return {
+    message: 'Artist profile fetched successfully',
+    data: {
+      artist,
+      stats: {
+        totalSongs:   allSongs.length,
+        totalAlbums:  albums.length,
+        totalSingles: singles.length,
+        totalPlays:   allSongs.reduce((sum, s) => sum + (s.playCount ?? 0), 0),
+      },
+      popularSongs,
+      albums,
+      singles,
+      //albumSongs,
+    },
+  };
+}
 }

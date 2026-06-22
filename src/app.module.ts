@@ -21,6 +21,7 @@ import { PlanModule } from './modules/plan/plan.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { AdminModule } from './modules/admin/admin.module';
 
+
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -53,7 +54,7 @@ import { AdminModule } from './modules/admin/admin.module';
     StripeModule,
     PlanModule,
     SubscriptionModule,
-    AdminModule,
+    AdminModule
   ],
   controllers: [AppController],
   providers: [

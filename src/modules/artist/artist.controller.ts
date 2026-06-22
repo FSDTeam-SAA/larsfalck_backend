@@ -81,4 +81,11 @@ export class ArtistController {
   remove(@Param('id') id: string) {
     return this.artistService.remove(id);
   }
+
+  // place before :id route
+  @Public()
+  @Get(':id/profile')
+  getProfile(@Param('id') id: string) {
+    return this.artistService.getProfile(id);
+  }
 }

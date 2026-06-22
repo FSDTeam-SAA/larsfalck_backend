@@ -76,14 +76,50 @@ export class AlbumService {
     };
   }
 
-  async findOne(id: string) {
-    const album = await this.albumModel
-      .findById(id)
-      .populate('artists', 'name image description')
-      .select('-__v');
-    if (!album) throw new HttpException('Album not found', HttpStatus.NOT_FOUND);
-    return { message: 'Album fetched successfully', data: album };
-  }
+async findOne(id: string) {
+  const album = await this.albumModel
+    .findById(id)
+    .populate('artists', 'name image description status')
+    .select('-__v');
+
+  if (!album) throw new HttpException('Album not found', HttpStatus.NOT_FOUND);
+
+  const songs = await this.songModel
+    .find({ albums: album._id, status: 'active' })
+    .populate('artists', 'name image description status')
+    .populate('genres',  'name')
+    .populate('tags',    'name')
+    .select('-__v')
+    .sort({ createdAt: -1 });
+
+  // collect all unique artists across all songs + album artists
+  const artistMap = new Map<string, any>();
+
+  // add album-level artists first
+  (album.artists as any[]).forEach((artist) => {
+    artistMap.set(artist._id.toString(), artist);
+  });
+
+  // add song-level artists
+  songs.forEach((song) => {
+    (song.artists as any[]).forEach((artist) => {
+      artistMap.set(artist._id.toString(), artist);
+    });
+  });
+
+  const uniqueArtists = Array.from(artistMap.values());
+
+  return {
+    message: 'Album fetched successfully',
+    data: {
+      album,
+      songs,
+      songCount:     songs.length,
+      artists:       uniqueArtists,
+      artistCount:   uniqueArtists.length,
+    },
+  };
+}
 
   async update(
     id: string,
