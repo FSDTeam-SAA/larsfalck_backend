@@ -99,7 +99,7 @@ export class PlaylistController {
     @CurrentUser('_id') userId: string,
     @CurrentUser('role') role: string,
   ) {
-    return this.playlistService.findOne(id, userId, role === RoleType.ADMIN);
+    return this.playlistService.findOne(id, userId, role === RoleType.ADMIN || role === RoleType.USER);
   }
 
   @Put(':id')
@@ -113,7 +113,7 @@ export class PlaylistController {
     @Body() dto: UpdatePlaylistDto,
     @UploadedFiles() files: { coverImage?: Express.Multer.File[] },
   ) {
-    return this.playlistService.update(id, userId, role === RoleType.ADMIN, dto, files as any);
+    return this.playlistService.update(id, userId, role === RoleType.ADMIN || role === RoleType.USER, dto, files as any);
   }
 
   @Patch(':id/songs/add')
@@ -124,7 +124,7 @@ export class PlaylistController {
     @CurrentUser('role') role: string,
     @Body() dto: AddRemoveSongsDto,
   ) {
-    return this.playlistService.addSongs(id, userId, role === RoleType.ADMIN, dto);
+    return this.playlistService.addSongs(id, userId, role === RoleType.ADMIN || role === RoleType.USER, dto);
   }
 
   @Patch(':id/songs/remove')
@@ -135,7 +135,7 @@ export class PlaylistController {
     @CurrentUser('role') role: string,
     @Body() dto: AddRemoveSongsDto,
   ) {
-    return this.playlistService.removeSongs(id, userId, role === RoleType.ADMIN, dto);
+    return this.playlistService.removeSongs(id, userId, role === RoleType.ADMIN || role === RoleType.USER, dto);
   }
 
   @Delete(':id')
@@ -145,6 +145,6 @@ export class PlaylistController {
     @CurrentUser('_id') userId: string,
     @CurrentUser('role') role: string,
   ) {
-    return this.playlistService.remove(id, userId, role === RoleType.ADMIN);
+    return this.playlistService.remove(id, userId, role === RoleType.ADMIN || role === RoleType.USER);
   }
 }
