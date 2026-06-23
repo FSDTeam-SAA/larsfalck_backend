@@ -7,14 +7,13 @@ import { DatabaseModule }              from './infrastructure/database/database.
 import { QueueModule }                 from './infrastructure/queue/queue.module';
 import { QueueProducerService }        from './infrastructure/queue/queue-producer.service';
 import { SubscriptionProducerService } from './infrastructure/queue/subscription-producer.service';
-import { RedisModule } from './infrastructure/redis/redis.module';
+import { HomeProducerService }         from './infrastructure/queue/home-producer.service';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, load: configs, envFilePath: '.env' }),
     LoggerModule,
     DatabaseModule,
-    RedisModule,
     QueueModule,
   ],
 })
@@ -29,7 +28,15 @@ async function bootstrap() {
   const queueProducer = app.get(QueueProducerService);
   await queueProducer.schedulePlayCountSync();
 
-  console.log('Worker running — expiry check at 9am, play count sync every 5 mins');
+  const homeProducer = app.get(HomeProducerService);
+  await homeProducer.scheduleTrendingCompute();
+
+  console.log([
+    'Worker running',
+    '→ Expiry check:       9am daily',
+    '→ Play count sync:    every 5 mins',
+    '→ Trending compute:   every 2 hours',
+  ].join('\n'));
 }
 
 bootstrap();
