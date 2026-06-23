@@ -20,6 +20,7 @@ import { StripeModule } from './infrastructure/stripe/stripe.module';
 import { PlanModule } from './modules/plan/plan.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { AdminModule } from './modules/admin/admin.module';
+import { HomeModule } from './modules/home/home.module';
 
 
 @Module({
@@ -54,7 +55,8 @@ import { AdminModule } from './modules/admin/admin.module';
     StripeModule,
     PlanModule,
     SubscriptionModule,
-    AdminModule
+    AdminModule,
+    HomeModule,
   ],
   controllers: [AppController],
   providers: [
