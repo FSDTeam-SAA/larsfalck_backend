@@ -69,16 +69,19 @@ export class HomeService {
   async getRecommended(userId: string, limit = 20): Promise<any[]> {
     const user = await this.userModel
       .findById(userId)
-      .select('preferredGenres favoriteSongs favoriteAlbums subscription')
+      .select('preferredGenres favoriteSongs favoriteAlbums')
       .lean();
 
     if (!user) return [];
 
-    const preferredGenreIds  = (user.preferredGenres  ?? []).map((g: any) => g.toString());
-    const favoriteSongIds    = (user.favoriteSongs     ?? []).map((s: any) => s.toString());
-    const favoriteAlbumIds   = (user.favoriteAlbums    ?? []).map((a: any) => a.toString());
+    const preferredGenreIds = (user.preferredGenres ?? []).map((g: any) => g.toString());
+    const favoriteSongIds   = (user.favoriteSongs   ?? []).map((s: any) => s.toString());
 
-    // get artist IDs from favorite songs
+    // if user has no preferences yet → return popular songs as fallback
+    if (!preferredGenreIds.length && !favoriteSongIds.length) {
+      return this.getPopularSongs(limit);
+    }
+
     const favSongs = await this.songModel
       .find({ _id: { $in: favoriteSongIds } })
       .select('artists')
@@ -88,31 +91,25 @@ export class HomeService {
       ...new Set(favSongs.flatMap((s) => s.artists.map((a: any) => a.toString()))),
     ];
 
-    // fetch candidate songs — exclude already favorited
-    const now     = new Date();
-    const ago30d  = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const ago30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     const candidates = await this.songModel
-      .find({
-        status: 'active',
-        _id:    { $nin: favoriteSongIds },
-      })
+      .find({ status: 'active', _id: { $nin: favoriteSongIds } })
       .populate('artists', 'name image')
       .populate('genres',  'name')
       .populate('albums',  'name coverImage')
       .select('-__v -audioKey -coverImageKey')
       .lean();
 
-    // score each candidate
     const scored = candidates.map((song) => {
-      const songGenreIds   = song.genres.map((g: any) => g._id?.toString() ?? g.toString());
-      const songArtistIds  = song.artists.map((a: any) => a._id?.toString() ?? a.toString());
-      const isNew = new Date((song as any).createdAt) >= ago30d;
+      const songGenreIds  = song.genres.map((g: any)  => g._id?.toString() ?? g.toString());
+      const songArtistIds = song.artists.map((a: any) => a._id?.toString() ?? a.toString());
+      const isNew         = new Date((song as any).createdAt) >= ago30d;
 
-      const genreMatch   = songGenreIds.some((g: string) => preferredGenreIds.includes(g))  ? 1 : 0;
-      const artistMatch  = songArtistIds.some((a: string) => favoriteArtistIds.includes(a)) ? 1 : 0;
-      const popularity   = Math.min((song.playCount ?? 0) / 10000, 1);  // normalize 0-1
-      const freshness    = isNew ? 1 : 0;
+      const genreMatch  = songGenreIds.some((g: string)  => preferredGenreIds.includes(g))  ? 1 : 0;
+      const artistMatch = songArtistIds.some((a: string) => favoriteArtistIds.includes(a))  ? 1 : 0;
+      const popularity  = Math.min((song.playCount ?? 0) / 10000, 1);
+      const freshness   = isNew ? 1 : 0;
 
       const score =
         genreMatch  * 0.4 +
@@ -123,10 +120,15 @@ export class HomeService {
       return { ...song, recommendationScore: Math.round(score * 100) / 100 };
     });
 
-    // sort by score, return top N
-    return scored
+    const results = scored
       .sort((a, b) => b.recommendationScore - a.recommendationScore)
       .slice(0, limit);
+
+    // if scores are all zero → fallback to popular
+    const hasResults = results.some((r) => r.recommendationScore > 0);
+    if (!hasResults) return this.getPopularSongs(limit);
+
+    return results;
   }
 
   // ─── Admin: trigger recompute manually ───────────────────────────────────
