@@ -1,6 +1,6 @@
 import { Injectable, HttpException, HttpStatus, Logger, Inject } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Song, SongDocument } from './schemas/song.schema';
 import {
   CreateSongDto,
@@ -14,6 +14,9 @@ import { createFilter, createMeta, createPaginationInfo } from '../../common/uti
 import { extractAudioDuration } from '../../common/utils/audio.util';
 import { QueueProducerService } from '../../infrastructure/queue/queue-producer.service';
 import Redis from 'ioredis';
+import { User, UserDocument } from '../auth/schemas/user.schema';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 // populate config reused across queries
 const SONG_POPULATE = [
@@ -30,10 +33,19 @@ export class SongService {
 
   constructor(
     @InjectModel(Song.name) private readonly songModel: Model<SongDocument>,
+    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
     private readonly s3Service: S3Service,
     private readonly queueProducer: QueueProducerService,
     @Inject('REDIS_CLIENT') private readonly redis: Redis,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
   ) {}
+
+  decodeToken(token: string): any {
+    return this.jwtService.verify(token, {
+      secret: this.configService.get<string>('auth.accessTokenSecret'),
+    });
+  }
 
   // ─── Single Create ────────────────────────────────────────────────────────
 
@@ -49,7 +61,7 @@ export class SongService {
     files['coverImage']?.[0]
         ? this.s3Service.upload(files['coverImage'][0].path, 'songs/covers')
         : Promise.resolve(null),
-    extractAudioDuration(audioFile.path),   // ← auto extracted before upload
+    extractAudioDuration(audioFile.path),
     ]);
 
     const song = await this.songModel.create({
@@ -58,7 +70,7 @@ export class SongService {
     audioKey:      audio.key,
     coverImage:    cover?.url ?? '',
     coverImageKey: cover?.key ?? '',
-    duration,                               // ← replaces dto.duration
+    duration,                              
     });
 
     return {
@@ -310,13 +322,39 @@ export class SongService {
 
   // ─── Play Count ───────────────────────────────────────────────────────────
 
-  async recordPlay(songId: string) {
-    // verify song exists
+  async recordPlay(songId: string, userId?: string) {
     const exists = await this.songModel.exists({ _id: songId });
     if (!exists) throw new HttpException('Song not found', HttpStatus.NOT_FOUND);
 
-    // increment in Redis — key: play:songId
+    // always increment Redis play count
     await this.redis.incr(`play:${songId}`);
+
+    // if user is logged in → track recently played
+    if (userId) {
+      const objectId = new Types.ObjectId(songId);
+
+      await this.userModel.updateOne(
+        { _id: userId },
+        {
+          // remove if already exists (avoid duplicate)
+          $pull: { recentlyPlayed: { song: objectId } },
+        },
+      );
+
+      await this.userModel.updateOne(
+        { _id: userId },
+        {
+          // add to front
+          $push: {
+            recentlyPlayed: {
+              $each:     [{ song: objectId, playedAt: new Date() }],
+              $position: 0,
+              $slice:    10,   // keep only last 10
+            },
+          },
+        },
+      );
+    }
 
     return { message: 'Play recorded', data: null };
   }

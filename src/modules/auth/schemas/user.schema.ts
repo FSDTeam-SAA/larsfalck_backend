@@ -101,6 +101,15 @@ export class User {
  @Prop({ type: [{ type: Types.ObjectId, ref: 'Genre' }], default: [] })
  preferredGenres: Types.ObjectId[];
 
+  @Prop({
+    type: [{
+      song:     { type: Types.ObjectId, ref: 'Song' },
+      playedAt: { type: Date, default: Date.now },
+    }],
+    default: [],
+  })
+  recentlyPlayed: { song: Types.ObjectId; playedAt: Date }[];
+
   comparePassword:    (plain: string) => Promise<boolean>;
   generateAccessToken:  (payload: object, secret: string, expiresIn: string) => string;
   generateRefreshToken: (payload: object, secret: string, expiresIn: string) => string;

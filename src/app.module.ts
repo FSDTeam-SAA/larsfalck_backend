@@ -21,6 +21,7 @@ import { PlanModule } from './modules/plan/plan.module';
 import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { HomeModule } from './modules/home/home.module';
+import { RedisModule } from './infrastructure/redis/redis.module';
 
 
 @Module({
@@ -43,6 +44,7 @@ import { HomeModule } from './modules/home/home.module';
 
     LoggerModule,
     DatabaseModule,
+    RedisModule,
     AuthModule,
     UserModule,
     GenreModule,
