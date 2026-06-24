@@ -2,6 +2,7 @@ import {
   Controller, Get, Post, Put, Delete,
   Body, Param, Query, UseGuards, UseInterceptors,
   UploadedFiles, HttpCode, HttpStatus, BadRequestException,
+  Req,
 } from '@nestjs/common';
 import { FileFieldsInterceptor, FilesInterceptor} from '@nestjs/platform-express';
 import { SongService } from './song.service';
@@ -12,6 +13,7 @@ import { Roles }        from '../../common/decorators/roles.decorator';
 import { Public }       from '../../common/decorators/public.decorator';
 import { RoleType }     from '../../common/enums/role.enum';
 import { createDiskStorage } from '../../common/utils/multer.util';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 
 const mediaStorage = createDiskStorage('files');
@@ -86,7 +88,7 @@ export class SongController {
     return this.songService.bulkUpdate(dto, files as any);
   }
 
-  // ─── Read ────────────────────────────────────────────────────────────────
+  // ─── Read ──────────────────────
 
   @Public()
   @Get()
@@ -162,8 +164,23 @@ export class SongController {
   @Public()
   @Post(':id/play')
   @HttpCode(HttpStatus.OK)
-  recordPlay(@Param('id') id: string) {
-    return this.songService.recordPlay(id);
+  async recordPlay(
+    @Param('id') id: string,
+    @Req() req: any,
+  ) {
+    // manually extract userId from token if present — route is public so guard won't set req.user
+    let userId: string | undefined;
+    const authHeader = req.headers?.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const token   = authHeader.split(' ')[1];
+        const decoded = this.songService.decodeToken(token);
+        userId = decoded?._id;
+      } catch {
+        // invalid token — treat as guest
+      }
+    }
+    return this.songService.recordPlay(id, userId);
   }
 
   // ─── Delete ───────────────────────────────────────────────────────────────

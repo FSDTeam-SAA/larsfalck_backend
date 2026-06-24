@@ -197,6 +197,11 @@ export class UserController {
     return this.userService.deletePDF(userId);
   }
 
+  @Get('recently-played')
+  getRecentlyPlayed(@CurrentUser('_id') userId: string) {
+    return this.userService.getRecentlyPlayed(userId);
+  }
+
   // ─── Admin CRUD (parameterized — MUST be last) ────────
   @Get(':id')
   @UseGuards(RolesGuard)

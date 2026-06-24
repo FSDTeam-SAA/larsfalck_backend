@@ -287,6 +287,37 @@ export class UserService {
   }
 
 
+  async getRecentlyPlayed(userId: string) {
+    const user = await this.userModel
+      .findById(userId)
+      .populate({
+        path:     'recentlyPlayed.song',
+        select:   'name audioFile coverImage duration artists genres tags playCount',
+        populate: [
+          { path: 'artists', select: 'name image' },
+          { path: 'genres',  select: 'name'       },
+          { path: 'tags',    select: 'name'        },
+        ],
+      })
+      .select('recentlyPlayed')
+      .lean();
+
+    if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+
+    // filter out any nulls (deleted songs)
+    const songs = (user.recentlyPlayed ?? [])
+      .filter((r: any) => r.song !== null)
+      .map((r: any) => ({
+        ...r.song,
+        playedAt: r.playedAt,
+      }));
+
+    return {
+      message: 'Recently played songs fetched successfully',
+      data:    { songs, count: songs.length },
+    };
+  }
+
   // ─── Admin CRUD ───────────────
 
   async adminGetUserById(id: string) {
@@ -421,3 +452,5 @@ async getFavoriteStatus(userId: string, songIds: string[], albumIds: string[]) {
     };
   }
 }
+
+
