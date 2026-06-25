@@ -8,6 +8,9 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
+# Verify both entrypoints compiled 
+RUN ls dist/src/main.js && ls dist/src/worker.js
+
 # ---- Stage 2: Production ----
 FROM node:22-alpine AS production
 WORKDIR /app
