@@ -42,7 +42,7 @@ export class SubscriptionService {
       planId:     plan._id.toString(),
       mode:       'subscription',
       successUrl: `${frontendUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancelUrl:  `${frontendUrl}/pricing`,
+      cancelUrl:  `${frontendUrl}/subscription/cancel`,
     });
 
     return {
