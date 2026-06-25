@@ -12,6 +12,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    networks:
+      - app-network
 
   worker:
     build: .
@@ -25,6 +27,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+    networks:
+      - app-network
 
   redis:
     image: redis:7-alpine
@@ -32,6 +36,8 @@ services:
     restart: unless-stopped
     ports:
       - "6379:6379"
+    # appendonly enables AOF persistence — survives crash mid-write
+    command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
     healthcheck:
@@ -39,7 +45,10 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - app-network
 
+  # Local dev only
   redis-insight:
     image: redis/redisinsight:latest
     container_name: backend-redis-insight
@@ -48,6 +57,12 @@ services:
       - "5540:5540"
     depends_on:
       - redis
+    networks:
+      - app-network
 
 volumes:
   redis_data:
+
+networks:
+  app-network:
+    driver: bridge
