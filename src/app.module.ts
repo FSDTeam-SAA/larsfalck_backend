@@ -22,6 +22,7 @@ import { SubscriptionModule } from './modules/subscription/subscription.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { HomeModule } from './modules/home/home.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
+import { SearchModule } from './modules/search/search.module';
 
 
 @Module({
@@ -59,6 +60,7 @@ import { RedisModule } from './infrastructure/redis/redis.module';
     SubscriptionModule,
     AdminModule,
     HomeModule,
+    SearchModule,
   ],
   controllers: [AppController],
   providers: [
