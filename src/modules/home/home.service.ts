@@ -18,13 +18,17 @@ export class HomeService {
   // ─── GET /home/sections — all sections in one call ───────────────────────
 
   async getSections(userId?: string) {
-    const [popularSongs, popularArtists, popularAlbums, recommended] =
-      await Promise.all([
-        this.getPopularSongs(),
-        this.getPopularArtists(),
-        this.getPopularAlbums(),
-        userId ? this.getRecommended(userId) : Promise.resolve([]),
-      ]);
+    const [popularSongs, popularArtists, popularAlbums] = await Promise.all([
+      this.getPopularSongs(),
+      this.getPopularArtists(),
+      this.getPopularAlbums(),
+    ]);
+
+    // logged-in user → personalized recommendations
+    // guest → popular songs as recommended fallback
+    const recommended = userId
+      ? await this.getRecommended(userId)
+      : popularSongs.slice(0, 20);   // guests see popular songs as "recommended"
 
     return {
       message: 'Homepage sections fetched successfully',
