@@ -28,7 +28,7 @@ export class HomeService {
     // guest → popular songs as recommended fallback
     const recommended = userId
       ? await this.getRecommended(userId)
-      : popularSongs.slice(0, 20);   // guests see popular songs as "recommended"
+      : popularSongs.slice(0, 10);   // guests see popular songs as "recommended"
 
     return {
       message: 'Homepage sections fetched successfully',
