@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Query, UseGuards,
-  HttpCode, HttpStatus,
+  HttpCode, HttpStatus, Req,
 } from '@nestjs/common';
 import { HomeService } from './home.service';
 import { JwtAuthGuard }  from '../../common/guards/jwt-auth.guard';
@@ -9,23 +9,39 @@ import { Roles }         from '../../common/decorators/roles.decorator';
 import { Public }        from '../../common/decorators/public.decorator';
 import { CurrentUser }   from '../../common/decorators/current-user.decorator';
 import { RoleType }      from '../../common/enums/role.enum';
+import { ConfigService } from '@nestjs/config';
+import { JwtService }    from '@nestjs/jwt';
 
 @Controller('home')
 @UseGuards(JwtAuthGuard)
 export class HomeController {
-  constructor(private readonly homeService: HomeService) {}
+  constructor(
+    private readonly homeService:    HomeService,
+    private readonly jwtService:     JwtService,
+    private readonly configService:  ConfigService,
+  ) {}
 
-  // ─── Main endpoint — all sections in one call ─────────────────────────────
-  // Public users see popular sections
-  // Logged-in users also get personalized recommendations
+  // extract userId from token manually — route is @Public so guard won't set req.user
+  private extractUserId(req: any): string | undefined {
+    try {
+      const authHeader = req.headers?.authorization;
+      if (!authHeader?.startsWith('Bearer ')) return undefined;
+      const token   = authHeader.split(' ')[1];
+      const decoded = this.jwtService.verify(token, {
+        secret: this.configService.get<string>('auth.accessTokenSecret'),
+      });
+      return decoded?._id;
+    } catch {
+      return undefined;
+    }
+  }
 
   @Public()
   @Get('sections')
-  getSections(@CurrentUser('_id') userId?: string) {
+  getSections(@Req() req: any) {
+    const userId = this.extractUserId(req);
     return this.homeService.getSections(userId);
   }
-
-  // ─── Individual sections ──────────────────────────────────────────────────
 
   @Public()
   @Get('popular-songs')
@@ -52,8 +68,6 @@ export class HomeController {
   ): Promise<any> {
     return this.homeService.getRecommended(userId, limit ? Number(limit) : 20);
   }
-
-  // ─── Admin only ───────────────────────────────────────────────────────────
 
   @Post('recompute')
   @UseGuards(RolesGuard)
