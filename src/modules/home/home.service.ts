@@ -27,7 +27,7 @@ export class HomeService {
     // logged-in user → personalized recommendations
     // guest → popular songs as recommended fallback
     const recommended = userId
-      ? await this.getRecommended(userId)
+      ? await this.getRecommended(userId, 10)
       : popularSongs.slice(0, 10);   // guests see popular songs as "recommended"
 
     return {
