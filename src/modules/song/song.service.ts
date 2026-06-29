@@ -66,6 +66,7 @@ export class SongService {
 
     const song = await this.songModel.create({
     ...dto,
+    name:          dto.name || audioFile.originalname.replace(/\.[^.]+$/, ''),
     audioFile:     audio.url,
     audioKey:      audio.key,
     coverImage:    cover?.url ?? '',
