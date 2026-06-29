@@ -14,9 +14,10 @@ const toArray = ({ value }: { value: any }) =>
         .filter(Boolean);
 
 export class CreateSongDto {
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  name: string;
+  name?: string;
 
   @IsOptional()
   @IsArray()
