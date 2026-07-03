@@ -50,7 +50,7 @@ export class S3Service implements OnModuleInit {
         Key:         key,
         Body:        fileStream,
         ContentType: this.resolveContentType(ext),
-        ACL:         'public-read' as ObjectCannedACL,
+        // Remove ACL: 'public-read' — bucket is now private, CloudFront serves files
       },
     });
 
@@ -63,7 +63,12 @@ export class S3Service implements OnModuleInit {
       this.logger.warn(`Failed to delete temp file: ${filePath}`, err);
     }
 
-    const url = `https://${this.bucket}.s3.${this.configService.get<string>('s3.region')}.amazonaws.com/${key}`;
+    // use CDN URL if configured, fallback to S3 URL
+    const cdnUrl = this.configService.get<string>('s3.cdnUrl');
+    const url    = cdnUrl
+      ? `${cdnUrl}/${key}`
+      : `https://${this.bucket}.s3.${this.configService.get<string>('s3.region')}.amazonaws.com/${key}`;
+
     return { url, key };
   }
 
