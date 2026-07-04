@@ -7,6 +7,7 @@ import { User, UserSchema } from '../auth/schemas/user.schema';
 import { Plan, PlanSchema } from '../plan/schemas/plan.schema';
 import { AuthModule }   from '../auth/auth.module';
 import { StripeModule } from '../../infrastructure/stripe/stripe.module';
+import { EmailModule }  from '../../infrastructure/email/email.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { StripeModule } from '../../infrastructure/stripe/stripe.module';
     ]),
     AuthModule,
     StripeModule,
+    EmailModule,
   ],
   controllers: [OrganizationController],
   providers:   [OrganizationService],

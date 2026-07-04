@@ -32,73 +32,74 @@ export class PlanService {
     const plan = await this.planModel.create({ ...dto, stripePriceId });
     return { message: 'Plan created successfully', data: plan };
   }
-    async findAll(query: GetPlansQueryDto) {
-    const page   = Number(query.page  || 1);
-    const limit  = Number(query.limit || 10);
-    const filter = createFilter(query.search, query.date);
 
-    if (query.status)       filter.status      = query.status;
-    if (query.billingCycle) filter.billingCycle = query.billingCycle;
 
-    const total = await this.planModel.countDocuments(filter);
-    const plans = await this.planModel
-        .find(filter)
-        .sort({ price: 1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .select('-__v -stripePriceId');
+async findAll(query: GetPlansQueryDto) {
+  const page   = Number(query.page  || 1);
+  const limit  = Number(query.limit || 10);
+  const filter = createFilter(query.search, query.date);
 
-    // attach activeUsers count to each plan
-    const plansWithStats = await Promise.all(
-        plans.map(async (plan) => {
-        const activeUsers = await this.userModel.countDocuments({
-            'subscription.planId': plan._id,
-            'subscription.status': 'active',
-        });
-        return { ...plan.toObject(), activeUsers };
-        }),
-    );
+  if (query.status)       filter.status       = query.status;
+  if (query.billingCycle) filter.billingCycle  = query.billingCycle;
+  if (query.planType)     filter.planType      = query.planType;   // ← add this
 
-    // overall overview stats
-    const cycleBreakdown = await this.userModel.aggregate([
-        { $match: { 'subscription.status': 'active', 'subscription.planId': { $ne: null } } },
-        {
-        $lookup: {
-            from:         'plans',
-            localField:   'subscription.planId',
-            foreignField: '_id',
-            as:           'plan',
-        },
-        },
-        { $unwind: '$plan' },
-        { $group: { _id: '$plan.billingCycle', count: { $sum: 1 } } },
-    ]);
+  const total = await this.planModel.countDocuments(filter);
+  const plans = await this.planModel
+    .find(filter)
+    .sort({ price: 1 })
+    .skip((page - 1) * limit)
+    .limit(limit)
+    .select('-__v -stripePriceId');
 
-    const monthly = cycleBreakdown.find((c) => c._id === 'monthly')?.count ?? 0;
-    const yearly  = cycleBreakdown.find((c) => c._id === 'yearly')?.count  ?? 0;
+  // attach activeUsers count to each plan
+  const plansWithStats = await Promise.all(
+    plans.map(async (plan) => {
+      const activeUsers = await this.userModel.countDocuments({
+        'subscription.planId': plan._id,
+        'subscription.status': 'active',
+      });
+      return { ...plan.toObject(), activeUsers };
+    }),
+  );
 
-    const [totalTrial, totalExpired, totalCancelled] = await Promise.all([
-        this.userModel.countDocuments({ 'subscription.status': 'trial'     }),
-        this.userModel.countDocuments({ 'subscription.status': 'expired'   }),
-        this.userModel.countDocuments({ 'subscription.status': 'cancelled' }),
-    ]);
+  // overview stats
+  const cycleBreakdown = await this.userModel.aggregate([
+    { $match: { 'subscription.status': 'active', 'subscription.planId': { $ne: null } } },
+    {
+      $lookup: {
+        from: 'plans', localField: 'subscription.planId',
+        foreignField: '_id', as: 'plan',
+      },
+    },
+    { $unwind: '$plan' },
+    { $group: { _id: '$plan.billingCycle', count: { $sum: 1 } } },
+  ]);
 
-    return {
-        message: 'Plans fetched successfully',
-        meta:    createMeta(page, limit, total),
-        data: {
-        plans: plansWithStats,
-        paginationInfo: createPaginationInfo(page, limit, total),
-        overview: {
-            totalMonthlyActive: monthly,
-            totalYearlyActive:  yearly,
-            totalTrial,
-            totalExpired,
-            totalCancelled,
-        },
-        },
-    };
-    }
+  const monthly = cycleBreakdown.find((c) => c._id === 'monthly')?.count ?? 0;
+  const yearly  = cycleBreakdown.find((c) => c._id === 'yearly')?.count  ?? 0;
+
+  const [totalTrial, totalExpired, totalCancelled] = await Promise.all([
+    this.userModel.countDocuments({ 'subscription.status': 'trial'     }),
+    this.userModel.countDocuments({ 'subscription.status': 'expired'   }),
+    this.userModel.countDocuments({ 'subscription.status': 'cancelled' }),
+  ]);
+
+  return {
+    message: 'Plans fetched successfully',
+    meta:    createMeta(page, limit, total),
+    data: {
+      plans: plansWithStats,
+      paginationInfo: createPaginationInfo(page, limit, total),
+      overview: {
+        totalMonthlyActive: monthly,
+        totalYearlyActive:  yearly,
+        totalTrial,
+        totalExpired,
+        totalCancelled,
+      },
+    },
+  };
+}
 
   async findOne(id: string) {
     const plan = await this.planModel.findById(id).select('-__v -stripePriceId');

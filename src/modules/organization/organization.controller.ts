@@ -82,7 +82,7 @@ export class OrganizationController {
   @Get('all')
   @UseGuards(RolesGuard)
   @Roles(RoleType.ADMIN)
-  getAllOrgs(@Query() query: { page?: string; limit?: string; search?: string }) {
+    async getAllOrgs(@Query() query: { page?: string; limit?: string; search?: string }): Promise<any> {
     return this.orgService.getAllOrgs(query);
-  }
+    }
 }
