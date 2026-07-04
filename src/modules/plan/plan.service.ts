@@ -19,10 +19,10 @@ export class PlanService {
     const existing = await this.planModel.findOne({
       name:         { $regex: `^${dto.name}$`, $options: 'i' },
       billingCycle: dto.billingCycle,
+      planType:     dto.planType ?? 'individual',
     });
     if (existing) throw new HttpException('Plan already exists', HttpStatus.CONFLICT);
 
-    // auto-create product + price in Stripe
     const stripePriceId = await this.stripeService.createProductWithPrice({
       name:         dto.name,
       amount:       dto.price,
@@ -32,7 +32,6 @@ export class PlanService {
     const plan = await this.planModel.create({ ...dto, stripePriceId });
     return { message: 'Plan created successfully', data: plan };
   }
-
     async findAll(query: GetPlansQueryDto) {
     const page   = Number(query.page  || 1);
     const limit  = Number(query.limit || 10);

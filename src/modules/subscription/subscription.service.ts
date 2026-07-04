@@ -6,6 +6,7 @@ import { User, UserDocument } from '../auth/schemas/user.schema';
 import { Plan, PlanDocument } from '../plan/schemas/plan.schema';
 import { StripeService } from '../../infrastructure/stripe/stripe.service';
 import { SubscriptionProducerService } from '../../infrastructure/queue/subscription-producer.service';
+import { OrganizationService } from '../organization/organization.service';
 
 
 @Injectable()
@@ -16,6 +17,7 @@ export class SubscriptionService {
     private readonly stripeService: StripeService,
     private readonly subscriptionProducer: SubscriptionProducerService,
     private readonly configService: ConfigService,
+    private readonly orgService: OrganizationService,
   ) {}
 
   // ─── Create Stripe Checkout session ──────────────────────────────────────
@@ -77,44 +79,59 @@ export class SubscriptionService {
     return { received: true };
   }
 
-    private async onCheckoutCompleted(session: any) {
-    const { userId, planId } = session.metadata;
+
+  private async onCheckoutCompleted(session: any) {
+    const { userId, planId, type, businessName, seats } = session.metadata;
 
     const [user, plan] = await Promise.all([
-        this.userModel.findById(userId),
-        this.planModel.findById(planId),
+      this.userModel.findById(userId),
+      this.planModel.findById(planId),
     ]);
 
     if (!user || !plan) return;
 
-    const stripeSubscription = await this.stripeService.getSubscription(
-        session.subscription,
-    );
+    const stripeSubscription = await this.stripeService.getSubscription(session.subscription);
 
-    // Stripe v17+ stores dates differently — handle both formats
     const periodStart = stripeSubscription.current_period_start
-        ?? stripeSubscription.items?.data?.[0]?.current_period_start;
+      ?? stripeSubscription.items?.data?.[0]?.current_period_start;
     const periodEnd   = stripeSubscription.current_period_end
-        ?? stripeSubscription.items?.data?.[0]?.current_period_end;
+      ?? stripeSubscription.items?.data?.[0]?.current_period_end;
 
     const startDate = periodStart ? new Date(periodStart * 1000) : new Date();
     const endDate   = periodEnd
-        ? new Date(periodEnd * 1000)
-        : new Date(Date.now() + (plan.billingCycle === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000);
+      ? new Date(periodEnd * 1000)
+      : new Date(Date.now() + (plan.billingCycle === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000);
 
-    await this.subscriptionProducer.addActivationJob({
-        userId:               userId,
-        planId:               planId,
-        planName:             plan.name,
-        billingCycle:         plan.billingCycle,
+    // ─── Organization subscription ────────────────────────────────────────────
+    if (type === 'organization') {
+      await this.orgService.activateOrgSubscription({
+        userId,
+        planId,
+        businessName,
+        seats:                Number(seats),
         startDate:            startDate.toISOString(),
         endDate:              endDate.toISOString(),
         stripeCustomerId:     session.customer,
         stripeSubscriptionId: session.subscription,
-        userEmail:            user.email,
-        userName:             user.name,
-    });
+      });
+      return;
     }
+
+    // ─── Individual subscription (existing flow) ──────────────────────────────
+    await this.subscriptionProducer.addActivationJob({
+      userId,
+      planId,
+      planName:             plan.name,
+      billingCycle:         plan.billingCycle,
+      startDate:            startDate.toISOString(),
+      endDate:              endDate.toISOString(),
+      stripeCustomerId:     session.customer,
+      stripeSubscriptionId: session.subscription,
+      userEmail:            user.email,
+      userName:             user.name,
+    });
+  }
+
 
   private async onSubscriptionCancelled(subscription: any) {
     await this.userModel.findOneAndUpdate(

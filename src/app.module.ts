@@ -23,6 +23,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { HomeModule } from './modules/home/home.module';
 import { RedisModule } from './infrastructure/redis/redis.module';
 import { SearchModule } from './modules/search/search.module';
+import { OrganizationModule } from './modules/organization/organization.module';
 
 
 @Module({
@@ -61,6 +62,7 @@ import { SearchModule } from './modules/search/search.module';
     AdminModule,
     HomeModule,
     SearchModule,
+    OrganizationModule,
   ],
   controllers: [AppController],
   providers: [
