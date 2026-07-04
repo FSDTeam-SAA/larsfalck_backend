@@ -12,8 +12,17 @@ export class CreatePlanDto {
   @Transform(({ value }) => Number(value))
   price: number;
 
+  @IsOptional()
+  @IsNumber() @Min(0)
+  @Transform(({ value }) => Number(value))
+  pricePerSeat?: number;
+
   @IsEnum(['monthly', 'yearly'])
   billingCycle: string;
+
+  @IsOptional()
+  @IsEnum(['individual', 'organization'])
+  planType?: string;
 
   @IsOptional()
   @IsArray()
@@ -26,29 +35,29 @@ export class CreatePlanDto {
 }
 
 export class UpdatePlanDto {
-  @IsOptional() @IsString() @IsNotEmpty()
-  name?: string;
+  @IsOptional() @IsString() @IsNotEmpty() name?: string;
 
-  @IsOptional()
-  @IsNumber() @Min(0)
+  @IsOptional() @IsNumber() @Min(0)
   @Transform(({ value }) => Number(value))
   price?: number;
 
-  @IsOptional() @IsEnum(['monthly', 'yearly'])
-  billingCycle?: string;
+  @IsOptional() @IsNumber() @Min(0)
+  @Transform(({ value }) => Number(value))
+  pricePerSeat?: number;
 
-  @IsOptional() @IsArray() @IsString({ each: true })
-  features?: string[];
-
-  @IsOptional() @IsEnum(['active', 'inactive'])
-  status?: string;
+  @IsOptional() @IsEnum(['monthly', 'yearly'])  billingCycle?: string;
+  @IsOptional() @IsEnum(['individual', 'organization']) planType?: string;
+  @IsOptional() @IsArray() @IsString({ each: true }) features?: string[];
+  @IsOptional() @IsEnum(['active', 'inactive']) status?: string;
 }
 
 export class GetPlansQueryDto {
-  @IsOptional() @IsString() page?:         string;
-  @IsOptional() @IsString() limit?:        string;
-  @IsOptional() @IsString() search?:       string;
-  @IsOptional() @IsString() date?:         string;
-  @IsOptional() @IsEnum(['monthly', 'yearly'])  billingCycle?: string;
-  @IsOptional() @IsEnum(['active', 'inactive']) status?:       string;
+  @IsOptional() @IsString() page?:   string;
+  @IsOptional() @IsString() limit?:  string;
+  @IsOptional() @IsString() search?: string;
+  @IsOptional() @IsString() date?:   string;
+
+  @IsOptional() @IsEnum(['monthly', 'yearly'])       billingCycle?: string;
+  @IsOptional() @IsEnum(['active', 'inactive'])      status?:       string;
+  @IsOptional() @IsEnum(['individual', 'organization']) planType?:  string;
 }

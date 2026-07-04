@@ -110,6 +110,12 @@ export class User {
   })
   recentlyPlayed: { song: Types.ObjectId; playedAt: Date }[];
 
+  @Prop({ type: Types.ObjectId, ref: 'Organization', default: null })
+  orgId: Types.ObjectId;
+
+  @Prop({ type: String, enum: ['owner', 'worker', null], default: null })
+  orgRole: string;
+
   comparePassword:    (plain: string) => Promise<boolean>;
   generateAccessToken:  (payload: object, secret: string, expiresIn: string) => string;
   generateRefreshToken: (payload: object, secret: string, expiresIn: string) => string;

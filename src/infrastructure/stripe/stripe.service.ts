@@ -26,13 +26,18 @@ export class StripeService implements OnModuleInit {
     successUrl: string;
     cancelUrl:  string;
     mode:       string;
+    quantity?:  number;
+    metadata?:  Record<string, string>;
   }): Promise<any> {
     return this.stripe.checkout.sessions.create({
       mode:                 params.mode,
       payment_method_types: ['card'],
       customer_email:       params.userEmail,
-      line_items:           [{ price: params.priceId, quantity: 1 }],
-      metadata: {
+      line_items: [{
+        price:    params.priceId,
+        quantity: params.quantity ?? 1,
+      }],
+      metadata: params.metadata ?? {
         userId: params.userId,
         planId: params.planId,
       },
