@@ -1,6 +1,6 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Organization, OrganizationDocument } from './schemas/organization.schema';
 import { User, UserDocument } from '../auth/schemas/user.schema';
 import { Plan, PlanDocument } from '../plan/schemas/plan.schema';
@@ -8,21 +8,23 @@ import { StripeService } from '../../infrastructure/stripe/stripe.service';
 import { ConfigService } from '@nestjs/config';
 import { createMeta, createPaginationInfo } from '../../common/utils/pagination.util';
 import * as crypto from 'crypto';
+import { EmailService } from '../../infrastructure/email/email.service';
 
 @Injectable()
 export class OrganizationService {
-  constructor(
-    @InjectModel(Organization.name) private readonly orgModel:  Model<OrganizationDocument>,
-    @InjectModel(User.name)         private readonly userModel: Model<UserDocument>,
-    @InjectModel(Plan.name)         private readonly planModel: Model<PlanDocument>,
+    constructor(
+    @InjectModel(Organization.name) private readonly orgModel:    Model<OrganizationDocument>,
+    @InjectModel(User.name)         private readonly userModel:   Model<UserDocument>,
+    @InjectModel(Plan.name)         private readonly planModel:   Model<PlanDocument>,
     private readonly stripeService: StripeService,
     private readonly configService: ConfigService,
-  ) {}
+    private readonly emailService:  EmailService,
+    ) {}
 
   // ─── Generate unique org code ─────────────────────────────────────────────
 
   private generateOrgCode(): string {
-    return crypto.randomBytes(4).toString('hex').toUpperCase();  // e.g. "A3F9C2D1"
+    return crypto.randomBytes(4).toString('hex').toUpperCase();
   }
 
   // ─── Owner buys org subscription ─────────────────────────────────────────
@@ -78,7 +80,7 @@ export class OrganizationService {
 
   // ─── Called after Stripe webhook — activate org subscription ─────────────
 
-  async activateOrgSubscription(data: {
+    async activateOrgSubscription(data: {
     userId:               string;
     planId:               string;
     businessName:         string;
@@ -87,43 +89,67 @@ export class OrganizationService {
     endDate:              string;
     stripeCustomerId:     string;
     stripeSubscriptionId: string;
-  }) {
+    userEmail:            string;
+    userName:             string;
+    }) {
     // generate unique org code
     let orgCode = this.generateOrgCode();
     let exists  = await this.orgModel.findOne({ orgCode });
     while (exists) {
-      orgCode = this.generateOrgCode();
-      exists  = await this.orgModel.findOne({ orgCode });
+        orgCode = this.generateOrgCode();
+        exists  = await this.orgModel.findOne({ orgCode });
     }
+
+    const plan = await this.planModel.findById(data.planId).select('name billingCycle');
 
     // create organization
     const org = await this.orgModel.create({
-      name:     data.businessName,
-      ownerId:  data.userId,
-      orgCode,
-      maxSeats: data.seats,
-      usedSeats: 1,   // owner counts as 1 seat
-      subscription: {
+        name:     data.businessName,
+        ownerId:  new Types.ObjectId(data.userId),   // ← cast to ObjectId
+        orgCode,
+        maxSeats:  data.seats,
+        usedSeats: 1,
+        subscription: {
         planId:               data.planId,
         startDate:            new Date(data.startDate),
         endDate:              new Date(data.endDate),
         stripeCustomerId:     data.stripeCustomerId,
         stripeSubscriptionId: data.stripeSubscriptionId,
         status:               'active',
-      },
+        },
     });
 
-    // update owner user
+    // update owner — subscription + org info
     await this.userModel.findByIdAndUpdate(data.userId, {
-      orgId:                 org._id,
-      orgRole:               'owner',
-      hasActiveSubscription: true,
-      'subscription.status': 'active',
-      'subscription.planId': data.planId,
+        orgId:                 org._id,
+        orgRole:               'owner',
+        hasActiveSubscription: true,
+        'subscription.planId':               data.planId,
+        'subscription.startDate':            new Date(data.startDate),
+        'subscription.endDate':              new Date(data.endDate),
+        'subscription.stripeCustomerId':     data.stripeCustomerId,
+        'subscription.stripeSubscriptionId': data.stripeSubscriptionId,
+        'subscription.status':               'active',
+    });
+
+    // send org activation email
+    await this.emailService.sendEmail({
+        to:      data.userEmail,
+        subject: 'Organization Subscription Activated 🎵',
+        html:    this.orgActivationTemplate({
+        userName:     data.userName,
+        businessName: data.businessName,
+        orgCode,
+        seats:        data.seats,
+        planName:     plan?.name ?? 'Organization Plan',
+        billingCycle: plan?.billingCycle ?? 'monthly',
+        startDate:    data.startDate,
+        endDate:      data.endDate,
+        }),
     });
 
     return org;
-  }
+    }
 
   // ─── Worker joins org via code ────────────────────────────────────────────
 
@@ -182,6 +208,19 @@ export class OrganizationService {
       $inc: { usedSeats: 1 },
     });
 
+
+    // send welcome email to worker
+    await this.emailService.sendEmail({
+    to:      dto.email,
+    subject: `Welcome to ${org.name} 🎵`,
+    html:    this.workerWelcomeTemplate({
+        workerName:   dto.name,
+        businessName: org.name,
+        endDate:      org.subscription.endDate.toISOString(),
+    }),
+    });
+
+
     return {
       message: 'Successfully joined organization',
       data: {
@@ -197,36 +236,36 @@ export class OrganizationService {
 
   // ─── Get org info (owner only) ────────────────────────────────────────────
 
-  async getMyOrg(userId: string) {
+    async getMyOrg(userId: string) {
     const org = await this.orgModel
-      .findOne({ ownerId: userId })
-      .populate('subscription.planId', 'name price billingCycle')
-      .lean();
+        .findOne({ ownerId: new Types.ObjectId(userId) }) 
+        .populate('subscription.planId', 'name price billingCycle')
+        .lean();
 
     if (!org) throw new HttpException('No organization found', HttpStatus.NOT_FOUND);
 
     const workers = await this.userModel
-      .find({ orgId: org._id, orgRole: 'worker' })
-      .select('name email createdAt hasActiveSubscription')
-      .lean();
+        .find({ orgId: org._id, orgRole: 'worker' })
+        .select('name email createdAt hasActiveSubscription')
+        .lean();
 
     return {
-      message: 'Organization fetched successfully',
-      data: {
+        message: 'Organization fetched successfully',
+        data: {
         org,
         workers,
         seatInfo: {
-          maxSeats:       org.maxSeats,
-          usedSeats:      org.usedSeats,
-          availableSeats: org.maxSeats - org.usedSeats,
+            maxSeats:       org.maxSeats,
+            usedSeats:      org.usedSeats,
+            availableSeats: org.maxSeats - org.usedSeats,
         },
-      },
+        },
     };
-  }
+    }
 
   // ─── Admin: get all organizations ────────────────────────────────────────
 
-  async getAllOrgs(query: { page?: string; limit?: string; search?: string }) {
+  async getAllOrgs(query: { page?: string; limit?: string; search?: string }): Promise<any> {
     const page  = Number(query.page  || 1);
     const limit = Number(query.limit || 10);
     const filter: any = {};
@@ -240,18 +279,40 @@ export class OrganizationService {
 
     const total = await this.orgModel.countDocuments(filter);
     const orgs  = await this.orgModel
-      .find(filter)
-      .populate('ownerId',             'name email')
-      .populate('subscription.planId', 'name price billingCycle')
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean();
+        .find(filter)
+        .populate('ownerId',             'name email profileImage createdAt')
+        .populate('subscription.planId', 'name price billingCycle planType')
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean();
+
+    // attach workers to each org
+    const orgsWithWorkers = await Promise.all(
+        orgs.map(async (org) => {
+        const workers = await this.userModel
+            .find({ orgId: org._id, orgRole: 'worker' })
+            .select('name email profileImage createdAt hasActiveSubscription subscription')
+            .populate('subscription.planId', 'name billingCycle')
+            .lean();
+
+        return {
+            ...org,
+            workers,
+            seatInfo: {
+            maxSeats:       org.maxSeats,
+            usedSeats:      org.usedSeats,
+            availableSeats: org.maxSeats - org.usedSeats,
+            },
+            workerCount: workers.length,
+        };
+        }),
+    );
 
     return {
       message: 'Organizations fetched successfully',
       meta:    createMeta(page, limit, total),
-      data:    { orgs, paginationInfo: createPaginationInfo(page, limit, total) },
+      data:    { orgs: orgsWithWorkers, paginationInfo: createPaginationInfo(page, limit, total) },
     };
   }
 
@@ -277,4 +338,74 @@ export class OrganizationService {
 
     return { message: 'Worker removed from organization', data: null };
   }
+
+
+  private orgActivationTemplate(data: {
+  userName:     string;
+  businessName: string;
+  orgCode:      string;
+  seats:        number;
+  planName:     string;
+  billingCycle: string;
+  startDate:    string;
+  endDate:      string;
+}): string {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+  <style>
+    body{font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:0}
+    .container{max-width:600px;margin:40px auto;background:#fff;border-radius:8px;overflow:hidden}
+    .header{background:#16a34a;padding:24px;text-align:center}
+    .header h1{color:#fff;margin:0;font-size:24px}
+    .body{padding:32px}
+    .code-box{background:#f0fdf4;border:2px dashed #16a34a;border-radius:8px;padding:16px;text-align:center;margin:20px 0}
+    .code{font-size:32px;font-weight:bold;color:#16a34a;letter-spacing:6px}
+    .detail{margin:8px 0;font-size:15px;color:#374151}
+    .footer{text-align:center;padding:16px;font-size:12px;color:#9ca3af}
+  </style></head>
+  <body><div class="container">
+    <div class="header"><h1>🏢 Organization Activated!</h1></div>
+    <div class="body">
+      <p>Hi <strong>${data.userName}</strong>,</p>
+      <p>Your organization <strong>${data.businessName}</strong> subscription is now active!</p>
+      <p>Share this code with your team members so they can join:</p>
+      <div class="code-box">
+        <div class="code">${data.orgCode}</div>
+        <p style="color:#6b7280;margin:8px 0 0">Organization Code</p>
+      </div>
+      <p class="detail">📋 Plan: <strong>${data.planName} (${data.billingCycle})</strong></p>
+      <p class="detail">👥 Seats: <strong>${data.seats}</strong></p>
+      <p class="detail">📅 Start: <strong>${new Date(data.startDate).toDateString()}</strong></p>
+      <p class="detail">📅 End:   <strong>${new Date(data.endDate).toDateString()}</strong></p>
+      <p>Workers join at: <strong>${process.env.FRONTEND_URL}/join</strong></p>
+    </div>
+    <div class="footer">© ${new Date().getFullYear()} LarsFalck. All rights reserved.</div>
+  </div></body></html>`;
+}
+
+private workerWelcomeTemplate(data: {
+    workerName:   string;
+    businessName: string;
+    endDate:      string;
+    }): string {
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+    <style>
+        body{font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:0}
+        .container{max-width:600px;margin:40px auto;background:#fff;border-radius:8px;overflow:hidden}
+        .header{background:#2563eb;padding:24px;text-align:center}
+        .header h1{color:#fff;margin:0;font-size:24px}
+        .body{padding:32px}
+        .footer{text-align:center;padding:16px;font-size:12px;color:#9ca3af}
+    </style></head>
+    <body><div class="container">
+        <div class="header"><h1>🎵 Welcome to ${data.businessName}!</h1></div>
+        <div class="body">
+        <p>Hi <strong>${data.workerName}</strong>,</p>
+        <p>You have successfully joined <strong>${data.businessName}</strong> on LarsFalck.</p>
+        <p>Your account is active and you have full access to all premium features.</p>
+        <p>Your access is valid until: <strong>${new Date(data.endDate).toDateString()}</strong></p>
+        <p>Start exploring music now!</p>
+        </div>
+        <div class="footer">© ${new Date().getFullYear()} LarsFalck. All rights reserved.</div>
+    </div></body></html>`;
+    }
 }

@@ -102,7 +102,6 @@ export class SubscriptionService {
       ? new Date(periodEnd * 1000)
       : new Date(Date.now() + (plan.billingCycle === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000);
 
-    // ─── Organization subscription ────────────────────────────────────────────
     if (type === 'organization') {
       await this.orgService.activateOrgSubscription({
         userId,
@@ -113,11 +112,12 @@ export class SubscriptionService {
         endDate:              endDate.toISOString(),
         stripeCustomerId:     session.customer,
         stripeSubscriptionId: session.subscription,
+        userEmail:            user.email,     // ← pass email
+        userName:             user.name,      // ← pass name
       });
       return;
     }
 
-    // ─── Individual subscription (existing flow) ──────────────────────────────
     await this.subscriptionProducer.addActivationJob({
       userId,
       planId,
