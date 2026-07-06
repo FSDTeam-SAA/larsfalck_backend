@@ -80,49 +80,35 @@ export class SubscriptionService {
   }
 
 
-  private async onCheckoutCompleted(session: any) {
-    const { userId, planId, type, businessName, seats } = session.metadata;
+private async onCheckoutCompleted(session: any) {
+  const { userId, planId, type, businessName, seats, orgId } = session.metadata;
 
-    const [user, plan] = await Promise.all([
-      this.userModel.findById(userId),
-      this.planModel.findById(planId),
-    ]);
+  const [user, plan] = await Promise.all([
+    this.userModel.findById(userId),
+    this.planModel.findById(planId),
+  ]);
 
-    if (!user || !plan) return;
+  if (!user || !plan) return;
 
-    const stripeSubscription = await this.stripeService.getSubscription(session.subscription);
+  const stripeSubscription = await this.stripeService.getSubscription(session.subscription);
 
-    const periodStart = stripeSubscription.current_period_start
-      ?? stripeSubscription.items?.data?.[0]?.current_period_start;
-    const periodEnd   = stripeSubscription.current_period_end
-      ?? stripeSubscription.items?.data?.[0]?.current_period_end;
+  const periodStart = stripeSubscription.current_period_start
+    ?? stripeSubscription.items?.data?.[0]?.current_period_start;
+  const periodEnd   = stripeSubscription.current_period_end
+    ?? stripeSubscription.items?.data?.[0]?.current_period_end;
 
-    const startDate = periodStart ? new Date(periodStart * 1000) : new Date();
-    const endDate   = periodEnd
-      ? new Date(periodEnd * 1000)
-      : new Date(Date.now() + (plan.billingCycle === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000);
+  const startDate = periodStart ? new Date(periodStart * 1000) : new Date();
+  const endDate   = periodEnd
+    ? new Date(periodEnd * 1000)
+    : new Date(Date.now() + (plan.billingCycle === 'yearly' ? 365 : 30) * 24 * 60 * 60 * 1000);
 
-    if (type === 'organization') {
-      await this.orgService.activateOrgSubscription({
-        userId,
-        planId,
-        businessName,
-        seats:                Number(seats),
-        startDate:            startDate.toISOString(),
-        endDate:              endDate.toISOString(),
-        stripeCustomerId:     session.customer,
-        stripeSubscriptionId: session.subscription,
-        userEmail:            user.email,     // ← pass email
-        userName:             user.name,      // ← pass name
-      });
-      return;
-    }
-
-    await this.subscriptionProducer.addActivationJob({
+  // ─── New org subscription ─────────────────────────────────────────────────
+  if (type === 'organization') {
+    await this.orgService.activateOrgSubscription({
       userId,
       planId,
-      planName:             plan.name,
-      billingCycle:         plan.billingCycle,
+      businessName,
+      seats:                Number(seats),
       startDate:            startDate.toISOString(),
       endDate:              endDate.toISOString(),
       stripeCustomerId:     session.customer,
@@ -130,7 +116,40 @@ export class SubscriptionService {
       userEmail:            user.email,
       userName:             user.name,
     });
+    return;
   }
+
+  // ─── Org upgrade (plan or seats) ──────────────────────────────────────────
+  if (type === 'organization_upgrade') {
+    await this.orgService.handleOrgUpgrade({
+      orgId,
+      userId,
+      planId,
+      seats:                Number(seats),
+      startDate:            startDate.toISOString(),
+      endDate:              endDate.toISOString(),
+      stripeCustomerId:     session.customer,
+      stripeSubscriptionId: session.subscription,
+      userEmail:            user.email,
+      userName:             user.name,
+    });
+    return;
+  }
+
+  // ─── Individual subscription ──────────────────────────────────────────────
+  await this.subscriptionProducer.addActivationJob({
+    userId,
+    planId,
+    planName:             plan.name,
+    billingCycle:         plan.billingCycle,
+    startDate:            startDate.toISOString(),
+    endDate:              endDate.toISOString(),
+    stripeCustomerId:     session.customer,
+    stripeSubscriptionId: session.subscription,
+    userEmail:            user.email,
+    userName:             user.name,
+  });
+}
 
 
   private async onSubscriptionCancelled(subscription: any) {
