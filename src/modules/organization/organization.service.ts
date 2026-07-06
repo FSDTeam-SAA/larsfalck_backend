@@ -340,6 +340,142 @@ export class OrganizationService {
   }
 
 
+async createUpgradeCheckout(userId: string, dto: {
+  planId?: string;
+  seats?:  number;
+}) {
+  const org = await this.orgModel
+    .findOne({ ownerId: new Types.ObjectId(userId) })
+    .lean();   // ← remove populate, use lean
+
+  if (!org) throw new HttpException('Organization not found', HttpStatus.NOT_FOUND);
+  if (org.subscription.status !== 'active')
+    throw new HttpException('Organization subscription is not active', HttpStatus.BAD_REQUEST);
+  if (!dto.planId && !dto.seats)
+    throw new HttpException('Provide planId or seats to upgrade', HttpStatus.BAD_REQUEST);
+
+  // determine target plan — use existing planId if no new one provided
+  const targetPlanId = dto.planId ?? org.subscription.planId.toString();  // ← now safe, lean returns plain string
+  const targetPlan   = await this.planModel.findById(targetPlanId);
+
+  if (!targetPlan) throw new HttpException('Plan not found', HttpStatus.NOT_FOUND);
+  if (targetPlan.planType !== 'organization')
+    throw new HttpException('Must upgrade to an organization plan', HttpStatus.BAD_REQUEST);
+  if (!targetPlan.stripePriceId)
+    throw new HttpException('Plan not configured in Stripe', HttpStatus.BAD_REQUEST);
+
+  const targetSeats = dto.seats ?? org.maxSeats;
+  if (dto.seats && dto.seats <= org.maxSeats)
+    throw new HttpException(
+      `New seat count must be greater than current (${org.maxSeats})`,
+      HttpStatus.BAD_REQUEST,
+    );
+
+  const user = await this.userModel.findById(userId).select('email name');
+  if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+
+  const frontendUrl = this.configService.get<string>('app.frontendUrl', 'http://localhost:3000');
+
+  const session = await this.stripeService.createCheckoutSession({
+    priceId:    targetPlan.stripePriceId,
+    userId:     userId.toString(),
+    userEmail:  user.email,
+    planId:     targetPlanId.toString(),
+    mode:       'subscription',
+    successUrl: `${frontendUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancelUrl:  `${frontendUrl}/organization/upgrade`,
+    quantity:   targetSeats,
+    metadata: {
+      userId:       userId.toString(),
+      planId:       targetPlanId.toString(),
+      businessName: org.name,
+      seats:        String(targetSeats),
+      type:         'organization_upgrade',
+      orgId:        org._id.toString(),
+    },
+  });
+
+  return {
+    message: 'Upgrade checkout session created',
+    data:    { checkoutUrl: session.url, sessionId: session.id },
+  };
+}
+
+
+async handleOrgUpgrade(data: {
+  orgId:                string;
+  userId:               string;
+  planId:               string;
+  seats:                number;
+  startDate:            string;
+  endDate:              string;
+  stripeCustomerId:     string;
+  stripeSubscriptionId: string;
+  userEmail:            string;
+  userName:             string;
+}) {
+  const plan = await this.planModel.findById(data.planId).select('name billingCycle');
+
+  // update organization
+  const updatedOrg = await this.orgModel.findByIdAndUpdate(
+    data.orgId,
+    {
+      maxSeats:                            data.seats,
+      'subscription.planId':               new Types.ObjectId(data.planId),
+      'subscription.startDate':            new Date(data.startDate),
+      'subscription.endDate':              new Date(data.endDate),
+      'subscription.stripeCustomerId':     data.stripeCustomerId,
+      'subscription.stripeSubscriptionId': data.stripeSubscriptionId,
+      'subscription.status':               'active',
+    },
+    { new: true },
+  );
+
+  if (!updatedOrg) return;
+
+  // update all workers — cast orgId to ObjectId so query matches
+  const workerResult = await this.userModel.updateMany(
+    {
+      orgId:   new Types.ObjectId(data.orgId),   // ← cast to ObjectId
+      orgRole: 'worker',
+    },
+    {
+      'subscription.planId':   new Types.ObjectId(data.planId),  // ← cast to ObjectId
+      'subscription.startDate': new Date(data.startDate),
+      'subscription.endDate':   new Date(data.endDate),
+      'subscription.status':    'active',
+      hasActiveSubscription:    true,
+    },
+  );
+
+  // update owner subscription
+  await this.userModel.findByIdAndUpdate(data.userId, {
+    'subscription.planId':               new Types.ObjectId(data.planId),  // ← cast to ObjectId
+    'subscription.startDate':            new Date(data.startDate),
+    'subscription.endDate':              new Date(data.endDate),
+    'subscription.stripeCustomerId':     data.stripeCustomerId,
+    'subscription.stripeSubscriptionId': data.stripeSubscriptionId,
+    'subscription.status':               'active',
+    hasActiveSubscription:               true,
+  });
+
+  // send upgrade confirmation email
+  await this.emailService.sendEmail({
+    to:      data.userEmail,
+    subject: 'Organization Upgraded Successfully 🚀',
+    html:    this.orgUpgradeTemplate({
+      userName:     data.userName,
+      businessName: updatedOrg.name,
+      planName:     plan?.name ?? 'Organization Plan',
+      newSeats:     data.seats,
+      endDate:      data.endDate,
+    }),
+  });
+
+  return { workersUpdated: workerResult.modifiedCount };
+}
+
+
   private orgActivationTemplate(data: {
   userName:     string;
   businessName: string;
@@ -408,4 +544,36 @@ private workerWelcomeTemplate(data: {
         <div class="footer">© ${new Date().getFullYear()} LarsFalck. All rights reserved.</div>
     </div></body></html>`;
     }
+
+  private orgUpgradeTemplate(data: {
+  userName:     string;
+  businessName: string;
+  planName:     string;
+  newSeats:     number;
+  endDate:      string;
+}): string {
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+  <style>
+    body{font-family:Arial,sans-serif;background:#f4f4f4;margin:0;padding:0}
+    .container{max-width:600px;margin:40px auto;background:#fff;border-radius:8px;overflow:hidden}
+    .header{background:#7c3aed;padding:24px;text-align:center}
+    .header h1{color:#fff;margin:0;font-size:24px}
+    .body{padding:32px}
+    .detail{margin:8px 0;font-size:15px;color:#374151}
+    .footer{text-align:center;padding:16px;font-size:12px;color:#9ca3af}
+  </style></head>
+  <body><div class="container">
+    <div class="header"><h1>🚀 Organization Upgraded!</h1></div>
+    <div class="body">
+      <p>Hi <strong>${data.userName}</strong>,</p>
+      <p>Your organization <strong>${data.businessName}</strong> has been upgraded successfully.</p>
+      <p class="detail">📋 Plan:  <strong>${data.planName}</strong></p>
+      <p class="detail">👥 Total Seats: <strong>${data.newSeats}</strong></p>
+      <p class="detail">📅 Valid Until: <strong>${new Date(data.endDate).toDateString()}</strong></p>
+      <p>All existing members have been automatically upgraded.</p>
+    </div>
+    <div class="footer">© ${new Date().getFullYear()} LarsFalck. All rights reserved.</div>
+  </div></body></html>`;
+}
+
 }

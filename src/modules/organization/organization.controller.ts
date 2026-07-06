@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Post, Delete,
+  Controller, Get, Post, Put, Delete,
   Body, Param, Query, UseGuards, HttpCode, HttpStatus,
 } from '@nestjs/common';
 import { OrganizationService } from './organization.service';
@@ -35,6 +35,18 @@ class JoinOrgDto {
   preferredGenres?: string[];
 }
 
+class UpgradeOrgDto {
+  @IsOptional()
+  @IsMongoId()
+  planId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Transform(({ value }) => Number(value))
+  seats?: number;
+}
+
 class RemoveWorkerDto {
   @IsMongoId() workerId: string;
 }
@@ -66,6 +78,15 @@ export class OrganizationController {
   @Get('my')
   getMyOrg(@CurrentUser('_id') userId: string) {
     return this.orgService.getMyOrg(userId);
+  }
+
+  @Post('upgrade-checkout')
+  @HttpCode(HttpStatus.OK)
+  createUpgradeCheckout(
+    @CurrentUser('_id') userId: string,
+    @Body() dto: UpgradeOrgDto,
+  ): Promise<any> {
+    return this.orgService.createUpgradeCheckout(userId, dto);
   }
 
   // ─── Owner removes a worker ───────────────────────────────────────────────
