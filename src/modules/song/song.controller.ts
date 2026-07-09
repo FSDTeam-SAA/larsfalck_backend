@@ -12,7 +12,7 @@ import { RolesGuard }   from '../../common/guards/roles.guard';
 import { Roles }        from '../../common/decorators/roles.decorator';
 import { Public }       from '../../common/decorators/public.decorator';
 import { RoleType }     from '../../common/enums/role.enum';
-import { createDiskStorage } from '../../common/utils/multer.util';
+import { createDiskStorage, FILE_SIZE_LIMITS } from '../../common/utils/multer.util';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 
@@ -35,7 +35,13 @@ export class SongController {
         { name: 'audioFile',  maxCount: 1 },
         { name: 'coverImage', maxCount: 1 },
       ],
-      { storage: mediaStorage },
+      {
+      storage: mediaStorage,
+      limits: {
+        fileSize: FILE_SIZE_LIMITS.audio,   // 200MB per file
+        files:    501,                       // max 500 audio + 1 cover
+      },
+    },
     ),
   )
   create(
