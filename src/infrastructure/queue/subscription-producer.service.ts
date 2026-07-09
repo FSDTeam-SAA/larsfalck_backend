@@ -25,8 +25,8 @@ export class SubscriptionProducerService {
     return this.subscriptionQueue.add(SUBSCRIPTION_ACTIVATED, data, {
       attempts:         3,
       backoff:          { type: 'exponential', delay: 2000 },
-      removeOnComplete: { age: 86400 },
-      removeOnFail:     { age: 7 * 86400 },
+      removeOnComplete: { age: 5 * 60 },
+      removeOnFail:     { age: 60 * 60 },
     });
   }
 
