@@ -22,18 +22,25 @@ export class ArtistService {
     dto: CreateArtistDto,
     files: { [fieldname: string]: Express.Multer.File[] },
   ) {
-    const imageFile = files['image']?.[0];
+    const imageFile  = files['image']?.[0];
+    const coverFile  = files['coverImage']?.[0];
 
-    let image    = '';
-    let imageKey = '';
+    let image         = '';
+    let imageKey      = '';
+    let coverImage    = '';
+    let coverImageKey = '';
 
-    if (imageFile) {
-      const uploaded = await this.s3Service.upload(imageFile.path, 'artists');
-      image    = uploaded.url;
-      imageKey = uploaded.key;
-    }
+    const uploads = await Promise.all([
+      imageFile ? this.s3Service.upload(imageFile.path, 'artists') : Promise.resolve(null),
+      coverFile ? this.s3Service.upload(coverFile.path, 'artists/covers') : Promise.resolve(null),
+    ]);
 
-    const artist = await this.artistModel.create({ ...dto, image, imageKey });
+    if (uploads[0]) { image    = uploads[0].url; imageKey      = uploads[0].key; }
+    if (uploads[1]) { coverImage = uploads[1].url; coverImageKey = uploads[1].key; }
+
+    const artist = await this.artistModel.create({
+      ...dto, image, imageKey, coverImage, coverImageKey,
+    });
     return { message: 'Artist created successfully', data: artist };
   }
 
@@ -84,18 +91,36 @@ export class ArtistService {
     if (!artist) throw new HttpException('Artist not found', HttpStatus.NOT_FOUND);
 
     const imageFile = files['image']?.[0];
-    let image    = artist.image;
-    let imageKey = artist.imageKey;
+    const coverFile = files['coverImage']?.[0];
 
-    if (imageFile) {
+    let image         = artist.image;
+    let imageKey      = artist.imageKey;
+    let coverImage    = artist.coverImage;
+    let coverImageKey = artist.coverImageKey;
+
+    const [imageUpload, coverUpload] = await Promise.all([
+      imageFile ? this.s3Service.upload(imageFile.path, 'artists')        : Promise.resolve(null),
+      coverFile ? this.s3Service.upload(coverFile.path, 'artists/covers') : Promise.resolve(null),
+    ]);
+
+    if (imageUpload) {
       if (artist.imageKey) await this.s3Service.delete(artist.imageKey);
-      const uploaded = await this.s3Service.upload(imageFile.path, 'artists');
-      image    = uploaded.url;
-      imageKey = uploaded.key;
+      image    = imageUpload.url;
+      imageKey = imageUpload.key;
+    }
+
+    if (coverUpload) {
+      if (artist.coverImageKey) await this.s3Service.delete(artist.coverImageKey);
+      coverImage    = coverUpload.url;
+      coverImageKey = coverUpload.key;
     }
 
     const updated = await this.artistModel
-      .findByIdAndUpdate(id, { ...dto, image, imageKey }, { new: true, runValidators: true })
+      .findByIdAndUpdate(
+        id,
+        { ...dto, image, imageKey, coverImage, coverImageKey },
+        { new: true, runValidators: true },
+      )
       .select('-__v');
 
     return { message: 'Artist updated successfully', data: updated };
@@ -105,7 +130,10 @@ export class ArtistService {
     const artist = await this.artistModel.findByIdAndDelete(id);
     if (!artist) throw new HttpException('Artist not found', HttpStatus.NOT_FOUND);
 
-    if (artist.imageKey) await this.s3Service.delete(artist.imageKey);
+    await Promise.allSettled([
+      artist.imageKey      ? this.s3Service.delete(artist.imageKey)      : Promise.resolve(),
+      artist.coverImageKey ? this.s3Service.delete(artist.coverImageKey) : Promise.resolve(),
+    ]);
 
     return { message: 'Artist deleted successfully', data: null };
   }

@@ -25,11 +25,11 @@ export class ArtistController {
   @Roles(RoleType.ADMIN)
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'image', maxCount: 1 }], { storage: imageStorage }),
+    FileFieldsInterceptor([{ name: 'image', maxCount: 1 }, { name: 'coverImage', maxCount: 1 } ], { storage: imageStorage }),
   )
   create(
     @Body() dto: CreateArtistDto,
-    @UploadedFiles() files: { image?: Express.Multer.File[] },
+    @UploadedFiles() files: { image?: Express.Multer.File[], coverImage?: Express.Multer.File[] },
   ) {
     return this.artistService.create(dto, files as any);
   }
@@ -50,12 +50,12 @@ export class ArtistController {
   @UseGuards(RolesGuard)
   @Roles(RoleType.ADMIN)
   @UseInterceptors(
-    FileFieldsInterceptor([{ name: 'image', maxCount: 1 }], { storage: imageStorage }),
+    FileFieldsInterceptor([{ name: 'image', maxCount: 1 }, { name: 'coverImage', maxCount: 1 }], { storage: imageStorage }),
   )
   update(
     @Param('id') id: string,
     @Body() dto: UpdateArtistDto,
-    @UploadedFiles() files: { image?: Express.Multer.File[] },
+    @UploadedFiles() files: { image?: Express.Multer.File[], coverImage?: Express.Multer.File[] },
   ) {
     return this.artistService.update(id, dto, files as any);
   }
