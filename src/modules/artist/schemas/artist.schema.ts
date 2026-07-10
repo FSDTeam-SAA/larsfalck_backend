@@ -17,6 +17,12 @@ export class Artist {
   @Prop({ default: '' })
   imageKey: string;   // S3 object key — needed for clean deletion
 
+  @Prop({ default: '' })
+  coverImage: string;     
+
+  @Prop({ default: '' })
+  coverImageKey: string;  
+
   @Prop({ type: String, enum: ['active', 'inactive'], default: 'active' })
   status: string;
 }
