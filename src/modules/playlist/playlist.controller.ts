@@ -8,6 +8,7 @@ import { PlaylistService } from './playlist.service';
 import {
   CreatePlaylistDto, UpdatePlaylistDto,
   AddRemoveSongsDto, GetPlaylistsQueryDto,
+  ReorderSongsDto,
 } from './dto/playlist.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard }   from '../../common/guards/roles.guard';
@@ -114,6 +115,18 @@ export class PlaylistController {
     @UploadedFiles() files: { coverImage?: Express.Multer.File[] },
   ) {
     return this.playlistService.update(id, userId, role === RoleType.ADMIN || role === RoleType.USER, dto, files as any);
+  }
+
+  @Patch(':id/reorder')
+  reorderSongs(
+    @Param('id') id: string,
+    @CurrentUser('_id') userId: string,
+    @CurrentUser('role') role:  string,
+    @Body() dto: ReorderSongsDto,
+  ) {
+    return this.playlistService.reorderSongs(
+      id, userId, role === RoleType.ADMIN, dto.songIds,
+    );
   }
 
   @Patch(':id/songs/add')

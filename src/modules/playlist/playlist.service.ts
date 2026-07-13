@@ -9,6 +9,7 @@ import {
 } from './dto/playlist.dto';
 import { S3Service } from '../../infrastructure/s3/s3.service';
 import { createFilter, createMeta, createPaginationInfo } from '../../common/utils/pagination.util';
+import { User, UserDocument } from '../auth/schemas/user.schema';
 
 
 const PLAYLIST_POPULATE = [
@@ -29,6 +30,7 @@ export class PlaylistService {
   constructor(
     @InjectModel(Playlist.name) private readonly playlistModel: Model<PlaylistDocument>,
     @InjectModel(Song.name)     private readonly songModel:     Model<SongDocument>,
+     @InjectModel(User.name)     private readonly userModel:     Model<UserDocument>,
     private readonly s3Service: S3Service,
   ) {}
 
@@ -185,23 +187,58 @@ export class PlaylistService {
 
   // ─── Get single — admin sees any, user sees own or public admin ──────────
 
-  async findOne(id: string, userId: string, isAdmin: boolean) {
-    const playlist = await this.playlistModel
-      .findById(id)
-      .populate(PLAYLIST_POPULATE)
-      .select('-__v -coverImageKey');
+async findOne(id: string, userId: string, isAdmin: boolean) {
+  const playlist = await this.playlistModel
+    .findById(id)
+    .select('-__v -coverImageKey')
+    .lean() as any;  
 
-    if (!playlist) throw new HttpException('Playlist not found', HttpStatus.NOT_FOUND);
+  if (!playlist) throw new HttpException('Playlist not found', HttpStatus.NOT_FOUND);
 
-    if (!isAdmin) {
-      const isOwner  = playlist.owner._id.toString() === userId;
-      const isPublic = playlist.ownerType === 'admin' && playlist.status === 'active';
-      if (!isOwner && !isPublic)
-        throw new HttpException('Playlist not found', HttpStatus.NOT_FOUND);
-    }
-
-    return { message: 'Playlist fetched successfully', data: playlist };
+  if (!isAdmin) {
+    const isOwner  = playlist.owner.toString() === userId;
+    const isPublic = playlist.ownerType === 'admin' && playlist.status === 'active';
+    if (!isOwner && !isPublic)
+      throw new HttpException('Playlist not found', HttpStatus.NOT_FOUND);
   }
+
+  
+
+  // populate owner
+  const owner = await this.userModel
+    .findById(playlist.owner)
+    .select('name email profileImage')
+    .lean();
+
+  // populate songs
+  const rawSongs = await this.songModel
+    .find({ _id: { $in: playlist.songs } })
+    .populate('artists', 'name image')
+    .populate('genres',  'name')
+    .select('name audioFile coverImage duration artists genres tags playCount')
+    .lean();
+
+  // apply songOrder if exists
+  let orderedSongs = rawSongs;
+  if (playlist.songOrder?.length) {
+    const orderMap = new Map<string, number>(
+      playlist.songOrder.map((sid: any, index: number) => [sid.toString(), index]),
+    );
+    orderedSongs = [...rawSongs].sort((a: any, b: any) => {
+      const aIdx = orderMap.has(a._id.toString()) ? orderMap.get(a._id.toString())! : 999;
+      const bIdx = orderMap.has(b._id.toString()) ? orderMap.get(b._id.toString())! : 999;
+      return aIdx - bIdx;
+    });
+  }
+
+  
+
+
+  return {
+    message: 'Playlist fetched successfully',
+    data:    { ...playlist, owner, songs: orderedSongs },
+  };
+}
 
   // ─── Update — admin updates any, user updates own only ──────────────────
 
@@ -331,4 +368,34 @@ export class PlaylistService {
 
     return { message: 'Playlist deleted successfully', data: null };
   }
+
+
+  async reorderSongs(
+  id:      string,
+  userId:  string,
+  isAdmin: boolean,
+  songIds: string[],
+) {
+  const playlist = await this.playlistModel.findById(id);
+  if (!playlist) throw new HttpException('Playlist not found', HttpStatus.NOT_FOUND);
+
+  if (!isAdmin && playlist.owner.toString() !== userId)
+    throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+
+  // validate all IDs belong to this playlist
+  const playlistSongIds = playlist.songs.map((s) => s.toString());
+  const invalid = songIds.filter((sid) => !playlistSongIds.includes(sid));
+
+  if (invalid.length)
+    throw new HttpException(
+      `These song IDs don't belong to this playlist: ${invalid.join(', ')}`,
+      HttpStatus.BAD_REQUEST,
+    );
+
+  await this.playlistModel.findByIdAndUpdate(id, {
+    songOrder: songIds.map((sid) => new Types.ObjectId(sid)),
+  });
+
+  return { message: 'Playlist songs reordered successfully', data: null };
+}
 }

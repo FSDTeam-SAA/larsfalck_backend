@@ -26,6 +26,9 @@ export class Album {
 
   @Prop({ default: '' })
   description?: string;
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Song' }], default: [] })
+  songOrder: Types.ObjectId[];
 }
 
 export const AlbumSchema = SchemaFactory.createForClass(Album);
