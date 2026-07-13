@@ -34,6 +34,9 @@ export class Playlist {
 
   @Prop({ default: '' })
   description?: string;
+
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'Song' }], default: [] })
+  songOrder: Types.ObjectId[];
 }
 
 export const PlaylistSchema = SchemaFactory.createForClass(Playlist);
