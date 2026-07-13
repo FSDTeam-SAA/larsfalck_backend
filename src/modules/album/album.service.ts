@@ -1,6 +1,6 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { Album, AlbumDocument } from './schemas/album.schema';
 import { CreateAlbumDto, UpdateAlbumDto, GetAlbumsQueryDto } from './dto/album.dto';
 import { S3Service } from '../../infrastructure/s3/s3.service';
@@ -79,44 +79,47 @@ export class AlbumService {
 async findOne(id: string) {
   const album = await this.albumModel
     .findById(id)
-    .populate('artists', 'name image description status')
+    .populate('artists', 'name image description')
     .select('-__v');
 
   if (!album) throw new HttpException('Album not found', HttpStatus.NOT_FOUND);
 
   const songs = await this.songModel
     .find({ albums: album._id, status: 'active' })
-    .populate('artists', 'name image description status')
+    .populate('artists', 'name image')
     .populate('genres',  'name')
     .populate('tags',    'name')
     .select('-__v')
-    .sort({ createdAt: -1 });
+    .lean();
 
-  // collect all unique artists across all songs + album artists
-  const artistMap = new Map<string, any>();
-
-  // add album-level artists first
-  (album.artists as any[]).forEach((artist) => {
-    artistMap.set(artist._id.toString(), artist);
-  });
-
-  // add song-level artists
-  songs.forEach((song) => {
-    (song.artists as any[]).forEach((artist) => {
-      artistMap.set(artist._id.toString(), artist);
+  // apply custom order if exists
+  let orderedSongs = songs;
+  if (album.songOrder?.length) {
+    const orderMap = new Map(
+      album.songOrder.map((sid, index) => [sid.toString(), index]),
+    );
+    orderedSongs = [...songs].sort((a, b) => {
+      const aIdx = orderMap.get(a._id.toString()) ?? 999;
+      const bIdx = orderMap.get(b._id.toString()) ?? 999;
+      return aIdx - bIdx;
     });
-  });
+  }
 
-  const uniqueArtists = Array.from(artistMap.values());
+  // collect unique artists
+  const artistMap = new Map<string, any>();
+  (album.artists as any[]).forEach((a) => artistMap.set(a._id.toString(), a));
+  orderedSongs.forEach((song) => {
+    (song.artists as any[]).forEach((a: any) => artistMap.set(a._id?.toString(), a));
+  });
 
   return {
     message: 'Album fetched successfully',
     data: {
       album,
-      songs,
-      songCount:     songs.length,
-      artists:       uniqueArtists,
-      artistCount:   uniqueArtists.length,
+      songs:       orderedSongs,
+      songCount:   orderedSongs.length,
+      artists:     Array.from(artistMap.values()),
+      artistCount: artistMap.size,
     },
   };
 }
@@ -183,4 +186,30 @@ async findOne(id: string) {
 
     return { message: 'Cover image updated successfully', data: updated };
   }
+
+  async reorderSongs(id: string, songIds: string[]) {
+  const album = await this.albumModel.findById(id);
+  if (!album) throw new HttpException('Album not found', HttpStatus.NOT_FOUND);
+
+  // validate all provided IDs actually belong to this album
+  const albumSongs = await this.songModel
+    .find({ albums: album._id, status: 'active' })
+    .select('_id')
+    .lean();
+
+  const validIds = new Set(albumSongs.map((s) => s._id.toString()));
+  const invalid  = songIds.filter((id) => !validIds.has(id));
+
+  if (invalid.length)
+    throw new HttpException(
+      `These song IDs don't belong to this album: ${invalid.join(', ')}`,
+      HttpStatus.BAD_REQUEST,
+    );
+
+  await this.albumModel.findByIdAndUpdate(id, {
+    songOrder: songIds.map((sid) => new Types.ObjectId(sid)),
+  });
+
+  return { message: 'Album songs reordered successfully', data: null };
+}
 }

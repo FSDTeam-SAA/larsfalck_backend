@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { AlbumService } from './album.service';
-import { CreateAlbumDto, UpdateAlbumDto, GetAlbumsQueryDto } from './dto/album.dto';
+import { CreateAlbumDto, UpdateAlbumDto, GetAlbumsQueryDto, ReorderSongsDto } from './dto/album.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard }   from '../../common/guards/roles.guard';
 import { Roles }        from '../../common/decorators/roles.decorator';
@@ -58,6 +58,16 @@ export class AlbumController {
     @UploadedFiles() files: { coverImage?: Express.Multer.File[] },
   ) {
     return this.albumService.update(id, dto, files as any);
+  }
+
+  @Put(':id/reorder')
+  @UseGuards(RolesGuard)
+  @Roles(RoleType.ADMIN)
+  reorderSongs(
+    @Param('id') id: string,
+    @Body() dto: ReorderSongsDto,
+  ) {
+    return this.albumService.reorderSongs(id, dto.songIds);
   }
 
   @Put(':id/cover-image')

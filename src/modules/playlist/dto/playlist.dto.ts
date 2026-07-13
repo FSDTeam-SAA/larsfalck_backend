@@ -67,3 +67,9 @@ export class GetPlaylistsQueryDto {
   @IsEnum(['active', 'inactive'])
   status?: string;
 }
+
+export class ReorderSongsDto {
+  @IsArray()
+  @IsMongoId({ each: true })
+  songIds: string[];
+}
