@@ -117,7 +117,7 @@ export class PlaylistController {
     return this.playlistService.update(id, userId, role === RoleType.ADMIN || role === RoleType.USER, dto, files as any);
   }
 
-  @Patch(':id/reorder')
+  @Put(':id/reorder')
   reorderSongs(
     @Param('id') id: string,
     @CurrentUser('_id') userId: string,
