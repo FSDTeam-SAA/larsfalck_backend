@@ -125,7 +125,7 @@ export class PlaylistController {
     @Body() dto: ReorderSongsDto,
   ) {
     return this.playlistService.reorderSongs(
-      id, userId, role === RoleType.ADMIN, dto.songIds,
+      id, userId, role === RoleType.ADMIN || role === RoleType.USER, dto.songIds,
     );
   }
 

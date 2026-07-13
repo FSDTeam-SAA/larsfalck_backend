@@ -16,10 +16,19 @@ async function bootstrap() {
 
   // ─── Body size limits ──────────────────────────────────────────────────
   // Must be set BEFORE any middleware — covers JSON + raw body for Stripe webhook
-  app.use(bodyParser.json({ limit: '50mb' }));
-  app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
-  // raw body for Stripe webhook signature verification
-  app.use(bodyParser.raw({ type: 'application/json', limit: '50mb' }));
+  //
+  // NOTE: bodyParser is disabled above (bodyParser: false), so Nest's automatic
+  // req.rawBody population does NOT happen. We must attach it ourselves via the
+  // `verify` callback — otherwise req.rawBody stays undefined and Stripe's
+  // constructEvent() will ALWAYS throw a signature-verification error (400).
+  const rawBodySaver = (req: any, _res: any, buf: Buffer) => {
+    if (buf?.length) {
+      req.rawBody = buf;
+    }
+  };
+
+  app.use(bodyParser.json({ limit: '50mb', verify: rawBodySaver }));
+  app.use(bodyParser.urlencoded({ limit: '50mb', extended: true, verify: rawBodySaver }));
 
   const configService = app.get(ConfigService);
   const logger = app.get(AppLogger);
