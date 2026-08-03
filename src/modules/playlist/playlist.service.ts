@@ -354,19 +354,43 @@ async findOne(id: string, userId: string, isAdmin: boolean) {
 
   // ─── Delete ───────────────────────────────────────────────────────────────
 
-  async remove(id: string, userId: string, isAdmin: boolean) {
+async remove(id: string, userId: string, isAdmin: boolean) {
     const playlist = await this.playlistModel.findById(id);
     if (!playlist) throw new HttpException('Playlist not found', HttpStatus.NOT_FOUND);
 
     if (!isAdmin && playlist.owner.toString() !== userId)
       throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
 
+    const songIds = [...playlist.songs];
+
+    // fetch songs first so we still have their S3 keys after deleting them
+    const songs = songIds.length
+      ? await this.songModel.find({ _id: { $in: songIds } }).select('audioKey coverImageKey')
+      : [];
+
     await playlist.deleteOne();
 
-    if (playlist.hasCustomCover && playlist.coverImageKey)
-      await this.s3Service.delete(playlist.coverImageKey);
+    if (songIds.length) {
+      await this.songModel.deleteMany({ _id: { $in: songIds } });
+    }
 
-    return { message: 'Playlist deleted successfully', data: null };
+    // clean up S3: playlist's own custom cover + every deleted song's audio/cover
+    const s3Deletes: Promise<any>[] = [];
+
+    if (playlist.hasCustomCover && playlist.coverImageKey)
+      s3Deletes.push(this.s3Service.delete(playlist.coverImageKey));
+
+    for (const song of songs) {
+      if (song.audioKey)      s3Deletes.push(this.s3Service.delete(song.audioKey));
+      if (song.coverImageKey) s3Deletes.push(this.s3Service.delete(song.coverImageKey));
+    }
+
+    await Promise.allSettled(s3Deletes);
+
+    return {
+      message: `Playlist and ${songIds.length} song(s) deleted successfully`,
+      data:    null,
+    };
   }
 
 
