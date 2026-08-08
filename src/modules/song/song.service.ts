@@ -102,10 +102,10 @@ export class SongService {
 
     // create one job per audio file — files stay on disk until worker picks them up
     const jobs = await Promise.all(
-      audioFiles.map((f) =>
+      audioFiles.map((f, index) =>
         this.queueProducer.addSongUploadJob({
           filePath:       f.path,
-          originalName:   f.originalname,
+          originalName:   dto.originalNames?.[index] || f.originalname,
           artists:        dto.artists ?? [],
           albums:         dto.albums  ?? [],
           genres:         dto.genres  ?? [],

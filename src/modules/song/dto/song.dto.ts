@@ -13,6 +13,16 @@ const toArray = ({ value }: { value: any }) =>
         .map((v) => v.trim())
         .filter(Boolean);
 
+const parseJsonStringArray = ({ value }: { value: any }) => {
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(String(value));
+    return Array.isArray(parsed) ? parsed : value;
+  } catch {
+    return value;
+  }
+};
+
 export class CreateSongDto {
   @IsOptional()
   @IsString()
@@ -101,6 +111,12 @@ export class GetSongsQueryDto {
 
 // For bulk upload — shared metadata applied to all songs
 export class BulkUploadSongDto {
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @Transform(parseJsonStringArray)
+  originalNames?: string[];
+
   @IsOptional()
   @IsArray()
   @IsMongoId({ each: true })
