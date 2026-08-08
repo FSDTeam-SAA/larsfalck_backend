@@ -35,7 +35,7 @@ services:
     container_name: backend-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "6370:6379"
     # appendonly enables AOF persistence — survives crash mid-write
     command: redis-server --appendonly yes
     volumes:
